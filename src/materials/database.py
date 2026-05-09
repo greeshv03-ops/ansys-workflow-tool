@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 DEFAULT_DB = Path(__file__).parent / "materials.db"
@@ -65,18 +66,17 @@ class MaterialDatabase:
 
     @staticmethod
     def seed(db_path: str = str(DEFAULT_DB)) -> None:
-        conn = sqlite3.connect(db_path)
-        conn.execute("""CREATE TABLE IF NOT EXISTS materials (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL, category TEXT NOT NULL,
-            E_GPa REAL NOT NULL, nu REAL NOT NULL, rho_kgm3 REAL NOT NULL,
-            alpha_1e6K REAL, k_WmK REAL, Cp_JkgK REAL,
-            yield_MPa REAL, UTS_MPa REAL, source TEXT)""")
-        conn.execute("DELETE FROM materials")
-        conn.executemany(
-            "INSERT INTO materials (name,category,E_GPa,nu,rho_kgm3,alpha_1e6K,"
-            "k_WmK,Cp_JkgK,yield_MPa,UTS_MPa,source) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            SEED_DATA,
-        )
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(db_path)) as conn:
+            conn.execute("""CREATE TABLE IF NOT EXISTS materials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL, category TEXT NOT NULL,
+                E_GPa REAL NOT NULL, nu REAL NOT NULL, rho_kgm3 REAL NOT NULL,
+                alpha_1e6K REAL, k_WmK REAL, Cp_JkgK REAL,
+                yield_MPa REAL, UTS_MPa REAL, source TEXT)""")
+            conn.execute("DELETE FROM materials")
+            conn.executemany(
+                "INSERT INTO materials (name,category,E_GPa,nu,rho_kgm3,alpha_1e6K,"
+                "k_WmK,Cp_JkgK,yield_MPa,UTS_MPa,source) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                SEED_DATA,
+            )
+            conn.commit()

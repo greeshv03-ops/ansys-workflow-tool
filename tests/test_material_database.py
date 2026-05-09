@@ -12,7 +12,9 @@ def test_search_returns_results(db):
     assert len(results) > 0
 
 def test_search_case_insensitive(db):
-    assert len(db.search("Aluminum")) > 0
+    lower = db.search("aluminum")
+    upper = db.search("ALUMINUM")
+    assert len(lower) > 0 and len(lower) == len(upper)
 
 def test_get_by_id_returns_material(db):
     m = db.get_by_id(db.search("structural steel")[0]["id"])
@@ -23,4 +25,5 @@ def test_get_by_id_missing_returns_none(db):
 
 def test_all_materials_have_required_fields(db):
     for m in db.search(""):
-        assert m["nu"] > 0 and m["rho_kgm3"] > 0
+        assert m["name"] and m["category"]
+        assert m["E_GPa"] > 0 and m["nu"] > 0 and m["rho_kgm3"] > 0
