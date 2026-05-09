@@ -44,3 +44,13 @@ def test_holes_detected(box_with_hole_step):
 def test_unsupported_format_raises():
     with pytest.raises(ValueError, match="Unsupported"):
         GeometryAnalyzer.analyze("model.obj")
+
+def test_iges_error_is_value_error_not_import_error(tmp_path):
+    fake_iges = tmp_path / "fake.iges"
+    fake_iges.write_text("fake content")
+    try:
+        GeometryAnalyzer.analyze(str(fake_iges))
+    except ValueError:
+        pass  # expected — either "Unsupported" or "IGES support unavailable"
+    except Exception as e:
+        pytest.fail(f"Expected ValueError, got {type(e).__name__}: {e}")

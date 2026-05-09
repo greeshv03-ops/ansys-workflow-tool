@@ -34,11 +34,17 @@ class GeometryAnalyzer:
 
     @staticmethod
     def _load_iges(path: str):
-        from OCC.Core.IGESControl import IGESControl_Reader
-        reader = IGESControl_Reader()
-        reader.ReadFile(path)
-        reader.TransferRoots()
-        return cq.Workplane().newObject([cq.Shape(reader.Shape())])
+        try:
+            from OCP.IGESControl import IGESControl_Reader
+        except ImportError:
+            raise ValueError("IGES support unavailable in this environment. Convert your file to STEP format.")
+        try:
+            reader = IGESControl_Reader()
+            reader.ReadFile(path)
+            reader.TransferRoots()
+            return cq.Workplane().newObject([cq.Shape(reader.Shape())])
+        except Exception as e:
+            raise ValueError(f"Failed to read IGES file: {e}. Re-export from your CAD tool and try again.")
 
     @staticmethod
     def _detect_thin_walls(bbox, volume, surface_area) -> bool:
@@ -78,14 +84,23 @@ class GeometryAnalyzer:
     def _detect_symmetry(shape, bbox: tuple) -> list[str]:
         planes = []
         try:
+            from OCP.GProp import GProp_GProps
+            from OCP.BRepGProp import BRepGProp
+            props = GProp_GProps()
+            BRepGProp.VolumeProperties_s(shape.wrapped, props)
+            com = props.CentreOfMass()
             bb = shape.BoundingBox()
-            tol = min(bbox) * 0.05
-            if abs((bb.xmax + bb.xmin) / 2) < tol:
-                planes.append("YZ")
-            if abs((bb.ymax + bb.ymin) / 2) < tol:
-                planes.append("XZ")
-            if abs((bb.zmax + bb.zmin) / 2) < tol:
-                planes.append("XY")
+            bbox_cx = (bb.xmax + bb.xmin) / 2
+            bbox_cy = (bb.ymax + bb.ymin) / 2
+            bbox_cz = (bb.zmax + bb.zmin) / 2
+            tol = min(bbox) * 0.1
+            # If COM ≈ bbox center the shape is centrosymmetric; suggest the plane
+            # perpendicular to its shortest dimension as the likely symmetry plane.
+            if (abs(com.X() - bbox_cx) < tol and
+                    abs(com.Y() - bbox_cy) < tol and
+                    abs(com.Z() - bbox_cz) < tol):
+                dims = {"YZ": bbox[0], "XZ": bbox[1], "XY": bbox[2]}
+                planes.append(min(dims, key=dims.get))
         except Exception:
             pass
         return planes
