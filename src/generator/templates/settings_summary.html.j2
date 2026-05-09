@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ANSYS Settings Summary</title>
+<style>
+  body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;color:#222}
+  h1{border-bottom:2px solid #003087;padding-bottom:8px}
+  h2{color:#003087;margin-top:28px}
+  table{border-collapse:collapse;width:100%;margin-top:8px}
+  th{background:#003087;color:#fff;padding:8px 12px;text-align:left}
+  td{padding:8px 12px;border-bottom:1px solid #ddd}
+  td:first-child{font-weight:bold;width:35%}
+  .note{color:#555;font-size:.87em}
+  @media print{body{margin:20px}}
+</style>
+</head>
+<body>
+<h1>ANSYS Simulation Settings Summary</h1>
+<p>Generated {{ generated_at }}</p>
+
+<h2>Geometry</h2>
+<table>
+<tr><th>Property</th><th>Value</th></tr>
+<tr><td>File</td><td>{{ config.geometry_path }}</td></tr>
+<tr><td>Bounding box</td><td>{{ "%.1f"|format(config.features.bbox[0]) }} × {{ "%.1f"|format(config.features.bbox[1]) }} × {{ "%.1f"|format(config.features.bbox[2]) }} mm</td></tr>
+<tr><td>Bodies</td><td>{{ config.features.body_count }}</td></tr>
+</table>
+
+<h2>Simulation Type</h2>
+<table>
+<tr><th>Property</th><th>Value</th></tr>
+<tr><td>Type</td><td>{{ config.sim_type.value|replace("_"," ")|title }}</td></tr>
+</table>
+
+<h2>Material</h2>
+<table>
+<tr><th>Property</th><th>Value</th></tr>
+<tr><td>Material</td><td>{{ config.material_name }}</td></tr>
+</table>
+
+<h2>Boundary Conditions</h2>
+<table>
+<tr><th>Type</th><th>Target</th><th>Magnitude</th><th>Direction</th></tr>
+{% for bc in config.boundary_conditions %}
+<tr><td>{{ bc.bc_type }}</td><td>{{ bc.target }}</td>
+<td>{% if bc.magnitude is not none %}{{ bc.magnitude }} {{ bc.unit }}{% else %}—{% endif %}</td>
+<td>{{ bc.direction or "—" }}</td></tr>
+{% else %}
+<tr><td colspan="4"><em>None defined</em></td></tr>
+{% endfor %}
+</table>
+
+<h2>Mesh Settings</h2>
+<table>
+<tr><th>Setting</th><th>Value</th><th>Rationale</th></tr>
+<tr><td>Global element size</td><td>{{ config.mesh.global_size_mm }} mm</td>
+<td class="note">L/50 of min bbox dim {{ "%.1f"|format(config.features.bbox|min) }} mm</td></tr>
+<tr><td>Element type</td><td>{{ config.mesh.element_type.value }}</td>
+<td class="note">{% if config.features.thin_walls %}Thin wall detected{% else %}Solid geometry{% endif %}</td></tr>
+{% for rz in config.mesh.refinement_zones %}
+<tr><td>Refinement ({{ rz.zone_type }})</td><td>{{ rz.size_mm }} mm</td><td class="note">{{ rz.description }}</td></tr>
+{% endfor %}
+</table>
+
+<h2>Solver Settings</h2>
+<table>
+<tr><th>Setting</th><th>Value</th></tr>
+{% if config.sim_type.value == "static_structural" %}
+<tr><td>Substeps</td><td>{{ config.solver.substeps }}</td></tr>
+<tr><td>Large deflection</td><td>{{ "On" if config.solver.large_deflection else "Off" }}</td></tr>
+{% else %}
+<tr><td>End time</td><td>{{ config.solver.end_time }} s</td></tr>
+<tr><td>Initial / Min / Max step</td><td>{{ config.solver.initial_step }} / {{ config.solver.min_step }} / {{ config.solver.max_step }} s</td></tr>
+<tr><td>Integration</td><td>{{ config.solver.integration_method }}</td></tr>
+{% endif %}
+<tr><td>Outputs</td><td>{{ config.solver.outputs|join(", ")|replace("_"," ")|title }}</td></tr>
+</table>
+
+<p class="note" style="margin-top:32px">
+Apply boundary conditions manually in ANSYS Mechanical by selecting the faces/edges named above.
+All other settings are pre-configured via the companion journal script.
+</p>
+</body>
+</html>
