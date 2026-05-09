@@ -47,3 +47,37 @@ def test_summary_contains_material(config, tmp_path):
 def test_summary_contains_bc_entries(config, tmp_path):
     content = Path(SummaryGenerator.write(config, str(tmp_path))).read_text()
     assert "Fixed" in content and "Force" in content and "Face A" in content
+
+@pytest.fixture
+def transient_config(config):
+    from dataclasses import replace
+    return replace(
+        config,
+        sim_type=SimulationType.TRANSIENT_STRUCTURAL,
+        solver=SolverSettings(end_time=2.0, initial_step=0.01, min_step=0.001,
+                              max_step=0.1, outputs=["total_deformation"]),
+    )
+
+@pytest.fixture
+def thermal_config(config):
+    from dataclasses import replace
+    return replace(config, sim_type=SimulationType.THERMAL_STRUCTURAL)
+
+def test_journal_transient_uses_correct_template(transient_config, tmp_path):
+    wbjn, _ = JournalGenerator.write(transient_config, str(tmp_path))
+    assert "Transient Structural" in Path(wbjn).read_text()
+
+def test_journal_thermal_uses_coupled_template(thermal_config, tmp_path):
+    wbjn, _ = JournalGenerator.write(thermal_config, str(tmp_path))
+    assert "Steady-State Thermal" in Path(wbjn).read_text()
+
+def test_summary_transient_renders_time_settings(transient_config, tmp_path):
+    html = Path(SummaryGenerator.write(transient_config, str(tmp_path))).read_text()
+    assert "End time" in html and "2.0" in html
+
+def test_journal_unknown_sim_type_raises():
+    from unittest.mock import MagicMock
+    fake_config = MagicMock()
+    fake_config.sim_type = "not_a_real_sim_type"
+    with pytest.raises(ValueError, match="No template registered"):
+        JournalGenerator.write(fake_config, "/tmp")

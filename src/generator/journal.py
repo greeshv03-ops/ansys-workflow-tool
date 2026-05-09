@@ -4,6 +4,7 @@ from jinja2 import Environment, FileSystemLoader
 from src.models import SimulationConfig, SimulationType
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
+_ENV = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)))
 _TEMPLATE_MAP = {
     SimulationType.STATIC_STRUCTURAL:    "static_structural.wbjn.j2",
     SimulationType.TRANSIENT_STRUCTURAL: "transient_structural.wbjn.j2",
@@ -14,9 +15,11 @@ _TEMPLATE_MAP = {
 class JournalGenerator:
 
     @staticmethod
-    def write(config: SimulationConfig, output_dir: str) -> tuple[str, str]:
-        env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)))
-        content = env.get_template(_TEMPLATE_MAP[config.sim_type]).render(
+    def write(config: SimulationConfig, output_dir: str | Path) -> tuple[str, str]:
+        template_name = _TEMPLATE_MAP.get(config.sim_type)
+        if template_name is None:
+            raise ValueError(f"No template registered for sim_type={config.sim_type!r}")
+        content = _ENV.get_template(template_name).render(
             config=config, generated_at=datetime.now().strftime("%Y-%m-%d %H:%M")
         )
         out = Path(output_dir)
