@@ -1,18 +1,19 @@
 import os
 
 from PyQt6.QtWidgets import (
-    QWizardPage, QVBoxLayout, QLabel, QPushButton,
-    QFileDialog, QProgressBar, QFrame
+    QWizardPage, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFileDialog, QProgressBar, QFrame, QSplitter
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
 from src.geometry.analyzer import GeometryAnalyzer
 from src.models import GeometryFeatures
+from src.wizard.viewer import GeometryViewer
 
 
 class _AnalyzerThread(QThread):
-    done = pyqtSignal(object)
+    done = pyqtSignal(object, object)
     failed = pyqtSignal(str)
 
     def __init__(self, path: str):
@@ -21,7 +22,8 @@ class _AnalyzerThread(QThread):
 
     def run(self):
         try:
-            self.done.emit(GeometryAnalyzer.analyze(self._path))
+            features, named_solids = GeometryAnalyzer.analyze_with_solids(self._path)
+            self.done.emit(features, named_solids)
         except Exception as e:
             self.failed.emit(str(e))
 
@@ -32,7 +34,7 @@ class _DropZone(QFrame):
     def __init__(self):
         super().__init__()
         self.setAcceptDrops(True)
-        self.setMinimumHeight(100)
+        self.setMinimumHeight(60)
         self.setFrameShape(QFrame.Shape.StyledPanel)
         layout = QVBoxLayout(self)
         self._lbl = QLabel("Drop CAD file here")
@@ -64,22 +66,33 @@ class UploadPage(QWizardPage):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+
+        top = QHBoxLayout()
         self._drop_zone = _DropZone()
         self._drop_zone.file_dropped.connect(self._load)
-        layout.addWidget(self._drop_zone)
-
+        top.addWidget(self._drop_zone, stretch=1)
         browse = QPushButton("Browse…")
         browse.clicked.connect(self._browse)
-        layout.addWidget(browse, alignment=Qt.AlignmentFlag.AlignRight)
+        top.addWidget(browse)
+        layout.addLayout(top)
 
         self._progress = QProgressBar()
         self._progress.setRange(0, 0)
         self._progress.hide()
         layout.addWidget(self._progress)
 
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        self._viewer = GeometryViewer()
+        self._viewer.setMinimumHeight(360)
+        splitter.addWidget(self._viewer)
+
         self._info = QLabel("")
         self._info.setWordWrap(True)
-        layout.addWidget(self._info)
+        self._info.setMinimumHeight(48)
+        splitter.addWidget(self._info)
+        splitter.setStretchFactor(0, 5)
+        splitter.setStretchFactor(1, 1)
+        layout.addWidget(splitter, stretch=1)
 
     def _browse(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -100,17 +113,19 @@ class UploadPage(QWizardPage):
         self._thread.failed.connect(self._on_error)
         self._thread.start()
 
-    def _on_done(self, features: GeometryFeatures):
+    def _on_done(self, features: GeometryFeatures, named_solids):
         self._features = features
         self._progress.hide()
         self.wizard().setProperty("geometry_features", features)
+        self.wizard().setProperty("geometry_named_solids", named_solids)
+        self._viewer.set_geometry(named_solids)
+
         b = features.bbox
         header = f"Bbox: {b[0]:.1f} × {b[1]:.1f} × {b[2]:.1f} mm  |  Bodies: {features.body_count}"
         if features.body_count > 3 and not features.faces:
             self._info.setText(
                 header
                 + "\nMulti-body assembly — detailed feature analysis skipped for speed."
-                + "\nYou can still proceed; on the BC page, type custom face names."
             )
         else:
             tags = []

@@ -1,7 +1,8 @@
+from dataclasses import dataclass, field
 from pathlib import Path
 import cadquery as cq
 
-from src.models import FaceLabel, GeometryFeatures
+from src.models import Body, FaceLabel, GeometryFeatures
 
 try:
     from OCP.BRep import BRep_Tool
@@ -14,6 +15,28 @@ try:
     _OCP_AVAILABLE = True
 except ImportError:
     _OCP_AVAILABLE = False
+
+try:
+    from OCP.STEPCAFControl import STEPCAFControl_Reader
+    from OCP.TDocStd import TDocStd_Document
+    from OCP.TCollection import TCollection_ExtendedString
+    from OCP.TDF import TDF_LabelSequence
+    from OCP.XCAFDoc import XCAFDoc_DocumentTool
+    from OCP.TDataStd import TDataStd_Name
+    _STEP_CAF_AVAILABLE = True
+except ImportError:
+    _STEP_CAF_AVAILABLE = False
+
+
+@dataclass
+class NamedSolid:
+    """Runtime pairing of a Body record with its underlying cadquery Shape.
+
+    Kept out of src.models because it carries a live OCC handle and is only
+    used by the viewer, never serialized into SimulationConfig.
+    """
+    body: Body
+    shape: "cq.Shape" = field(repr=False)
 
 _MAX_LABELED_FACES = 100
 _MAX_DETAILED_BODIES = 3
@@ -35,6 +58,15 @@ class GeometryAnalyzer:
 
     @staticmethod
     def analyze(path: str) -> GeometryFeatures:
+        return GeometryAnalyzer.analyze_with_solids(path)[0]
+
+    @staticmethod
+    def analyze_with_solids(path: str) -> "tuple[GeometryFeatures, list[NamedSolid]]":
+        """Same as analyze() but also returns the live NamedSolids for viewer use.
+
+        Use this from UI code that needs to render the geometry; both outputs
+        come from a single STEP/IGES parse.
+        """
         ext = Path(path).suffix.lower()
         if ext not in ('.step', '.stp', '.iges', '.igs'):
             raise ValueError(f"Unsupported format '{ext}'. Use STEP or IGES.")
@@ -44,15 +76,19 @@ class GeometryAnalyzer:
 
         shape = wp.val()
         body_count = len(wp.solids().vals())
+        is_assembly = body_count > _MAX_DETAILED_BODIES
+        named_solids = GeometryAnalyzer.load_named_solids(path, with_volume=not is_assembly)
+        bodies = [ns.body for ns in named_solids]
+        body_count = len(named_solids) or body_count
 
-        if body_count > _MAX_DETAILED_BODIES:
+        if is_assembly:
             bb = GeometryAnalyzer._fast_bbox(shape)
             bbox = (
                 round(bb.xmax - bb.xmin, 3),
                 round(bb.ymax - bb.ymin, 3),
                 round(bb.zmax - bb.zmin, 3),
             )
-            return GeometryFeatures(
+            features = GeometryFeatures(
                 bbox=bbox,
                 volume=0.0,
                 surface_area=0.0,
@@ -62,7 +98,9 @@ class GeometryAnalyzer:
                 symmetry_planes=[],
                 sharp_edges=False,
                 faces=[],
+                bodies=bodies,
             )
+            return features, named_solids
 
         bb = shape.BoundingBox()
         bbox = (
@@ -72,7 +110,7 @@ class GeometryAnalyzer:
         )
         volume = shape.Volume()
         area = shape.Area()
-        return GeometryFeatures(
+        features = GeometryFeatures(
             bbox=bbox,
             volume=round(volume, 3),
             surface_area=round(area, 3),
@@ -82,7 +120,54 @@ class GeometryAnalyzer:
             symmetry_planes=GeometryAnalyzer._detect_symmetry(shape, bbox),
             sharp_edges=GeometryAnalyzer._detect_sharp_edges(wp),
             faces=GeometryAnalyzer._label_faces(wp, bb, bbox),
+            bodies=bodies,
         )
+        return features, named_solids
+
+    @staticmethod
+    def load_named_solids(path: str, with_volume: bool = True) -> list[NamedSolid]:
+        """Load each solid in `path` paired with its part name from the file.
+
+        STEP files are read via STEPCAFControl_Reader to recover assembly part
+        names; for IGES or anything else, names fall back to "Body 1..N".
+
+        Pass with_volume=False to skip per-solid Volume() integration, which
+        is O(N) slow on multi-body assemblies.
+        """
+        ext = Path(path).suffix.lower()
+        if ext in ('.step', '.stp') and _STEP_CAF_AVAILABLE:
+            return GeometryAnalyzer._load_named_solids_step(path, with_volume)
+        wp = cq.importers.importStep(path) if ext in ('.step', '.stp') \
+            else GeometryAnalyzer._load_iges(path)
+        return [
+            _make_named_solid(i, f"Body {i + 1}", solid, with_volume)
+            for i, solid in enumerate(wp.solids().vals())
+        ]
+
+    @staticmethod
+    def _load_named_solids_step(path: str, with_volume: bool) -> list[NamedSolid]:
+        doc = TDocStd_Document(TCollection_ExtendedString("MDTV-XCAF"))
+        reader = STEPCAFControl_Reader()
+        reader.SetNameMode(True)
+        reader.ReadFile(path)
+        reader.Transfer(doc)
+
+        shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+        free_labels = TDF_LabelSequence()
+        shape_tool.GetFreeShapes(free_labels)
+
+        named: list[NamedSolid] = []
+        counter = [0]
+        for i in range(1, free_labels.Length() + 1):
+            _walk_assembly(shape_tool, free_labels.Value(i), named, counter, with_volume)
+
+        if not named:
+            wp = cq.importers.importStep(path)
+            named = [
+                _make_named_solid(i, f"Body {i + 1}", solid, with_volume)
+                for i, solid in enumerate(wp.solids().vals())
+            ]
+        return named
 
     @staticmethod
     def _fast_bbox(shape):
@@ -251,6 +336,75 @@ class GeometryAnalyzer:
 
         labels.sort(key=lambda lbl: -lbl.area)
         return labels[:_MAX_LABELED_FACES]
+
+
+def _make_named_solid(body_id: int, name: str, solid, with_volume: bool = True) -> NamedSolid:
+    if _OCP_AVAILABLE:
+        box = Bnd_Box()
+        BRepBndLib.Add_s(solid.wrapped, box, False)
+        xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
+    else:
+        bb = solid.BoundingBox()
+        xmin, ymin, zmin = bb.xmin, bb.ymin, bb.zmin
+        xmax, ymax, zmax = bb.xmax, bb.ymax, bb.zmax
+    bbox_center = (
+        round((xmin + xmax) / 2, 3),
+        round((ymin + ymax) / 2, 3),
+        round((zmin + zmax) / 2, 3),
+    )
+    return NamedSolid(
+        body=Body(
+            id=body_id,
+            name=name,
+            volume=round(solid.Volume(), 3) if with_volume else 0.0,
+            centroid=bbox_center,
+            bbox=(
+                round(xmax - xmin, 3),
+                round(ymax - ymin, 3),
+                round(zmax - zmin, 3),
+            ),
+        ),
+        shape=solid,
+    )
+
+
+def _label_name(label) -> str:
+    name_attr = TDataStd_Name()
+    if label.FindAttribute(TDataStd_Name.GetID_s(), name_attr):
+        return str(name_attr.Get().ToExtString())
+    return ""
+
+
+def _walk_assembly(shape_tool, label, named, counter, with_volume) -> None:
+    """Recursively walk a STEP assembly label tree, appending one NamedSolid per leaf solid.
+
+    Each component (instance) gets the name of the part it references, so all
+    instances of "Hex Bolt M8" share a name and the material UI can group them.
+    """
+    if shape_tool.IsAssembly_s(label):
+        components = TDF_LabelSequence()
+        shape_tool.GetComponents_s(label, components)
+        for i in range(1, components.Length() + 1):
+            comp_label = components.Value(i)
+            try:
+                from OCP.TDF import TDF_Label
+                ref_label = TDF_Label()
+                if shape_tool.IsReference_s(comp_label) and shape_tool.GetReferredShape_s(comp_label, ref_label):
+                    _walk_assembly(shape_tool, ref_label, named, counter, with_volume)
+                    continue
+            except Exception:
+                pass
+            _walk_assembly(shape_tool, comp_label, named, counter, with_volume)
+        return
+
+    name = _label_name(label) or f"Body {counter[0] + 1}"
+    try:
+        shape = shape_tool.GetShape_s(label)
+        for solid in cq.Workplane().newObject([cq.Shape(shape)]).solids().vals():
+            named.append(_make_named_solid(counter[0], name, solid, with_volume))
+            counter[0] += 1
+    except Exception:
+        pass
 
 
 def _classify_axis_direction(normal: tuple[float, float, float]) -> str | None:

@@ -26,6 +26,15 @@ class FaceLabel:
 
 
 @dataclass
+class Body:
+    id: int
+    name: str
+    volume: float
+    centroid: tuple[float, float, float]
+    bbox: tuple[float, float, float]
+
+
+@dataclass
 class GeometryFeatures:
     bbox: tuple[float, float, float]
     volume: float
@@ -36,6 +45,7 @@ class GeometryFeatures:
     symmetry_planes: list[str]
     sharp_edges: bool
     faces: list[FaceLabel] = field(default_factory=list)
+    bodies: list[Body] = field(default_factory=list)
 
 
 @dataclass
