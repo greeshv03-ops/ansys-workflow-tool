@@ -4,7 +4,8 @@ from src.generator.journal import JournalGenerator
 from src.generator.summary import SummaryGenerator
 from src.models import (
     SimulationConfig, SimulationType, ElementType,
-    GeometryFeatures, MeshSettings, SolverSettings, BoundaryCondition
+    GeometryFeatures, MeshSettings, SolverSettings, BoundaryCondition,
+    BodyMaterial,
 )
 
 @pytest.fixture
@@ -15,7 +16,9 @@ def config():
             bbox=(100.,50.,20.), volume=80000, surface_area=14000,
             body_count=1, thin_walls=False, holes=[], symmetry_planes=[], sharp_edges=False),
         sim_type=SimulationType.STATIC_STRUCTURAL,
-        material_id=1, material_name="Structural Steel",
+        body_materials=[BodyMaterial(
+            body_name="bracket", body_ids=[0],
+            material_id=1, material_name="Structural Steel")],
         boundary_conditions=[
             BoundaryCondition(bc_type="Fixed", target="Face A"),
             BoundaryCondition(bc_type="Force", target="Face B", magnitude=500., direction="Y"),

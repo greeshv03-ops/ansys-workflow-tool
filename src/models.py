@@ -84,12 +84,29 @@ class SolverSettings:
 
 
 @dataclass
+class BodyMaterial:
+    """Material assignment for one group of bodies sharing the same part name."""
+    body_name: str
+    body_ids: list[int]
+    material_id: int
+    material_name: str
+
+
+@dataclass
 class SimulationConfig:
     geometry_path: str
     features: GeometryFeatures
     sim_type: SimulationType
-    material_id: int
-    material_name: str
+    body_materials: list[BodyMaterial]
     boundary_conditions: list[BoundaryCondition]
     mesh: MeshSettings
     solver: SolverSettings
+
+    @property
+    def primary_material_name(self) -> str:
+        """First-assigned material; used as the summary header for single-body parts."""
+        return self.body_materials[0].material_name if self.body_materials else ""
+
+    @property
+    def primary_material_id(self) -> int:
+        return self.body_materials[0].material_id if self.body_materials else 0

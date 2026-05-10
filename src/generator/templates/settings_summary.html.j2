@@ -33,10 +33,14 @@
 <tr><td>Type</td><td>{{ config.sim_type.value|replace("_"," ")|title }}</td></tr>
 </table>
 
-<h2>Material</h2>
+<h2>Materials</h2>
 <table>
-<tr><th>Property</th><th>Value</th></tr>
-<tr><td>Material</td><td>{{ config.material_name }}</td></tr>
+<tr><th>Body</th><th>Instances</th><th>Material</th></tr>
+{% for bm in config.body_materials %}
+<tr><td>{{ bm.body_name }}</td><td>{{ bm.body_ids|length }}</td><td>{{ bm.material_name }}</td></tr>
+{% else %}
+<tr><td colspan="3"><em>No materials assigned</em></td></tr>
+{% endfor %}
 </table>
 
 <h2>Boundary Conditions</h2>
