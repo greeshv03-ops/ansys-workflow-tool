@@ -9,11 +9,26 @@ try:
     from OCP.GeomAbs import GeomAbs_Cylinder
     from OCP.GProp import GProp_GProps
     from OCP.BRepGProp import BRepGProp
+    from OCP.Bnd import Bnd_Box
+    from OCP.BRepBndLib import BRepBndLib
     _OCP_AVAILABLE = True
 except ImportError:
     _OCP_AVAILABLE = False
 
 _MAX_LABELED_FACES = 100
+_MAX_DETAILED_BODIES = 3
+
+
+class _BBox:
+    __slots__ = ("xmin", "ymin", "zmin", "xmax", "ymax", "zmax")
+
+    def __init__(self, xmin, ymin, zmin, xmax, ymax, zmax):
+        self.xmin = xmin
+        self.ymin = ymin
+        self.zmin = zmin
+        self.xmax = xmax
+        self.ymax = ymax
+        self.zmax = zmax
 
 
 class GeometryAnalyzer:
@@ -28,23 +43,59 @@ class GeometryAnalyzer:
             else GeometryAnalyzer._load_iges(path)
 
         shape = wp.val()
+        body_count = len(wp.solids().vals())
+
+        if body_count > _MAX_DETAILED_BODIES:
+            bb = GeometryAnalyzer._fast_bbox(shape)
+            bbox = (
+                round(bb.xmax - bb.xmin, 3),
+                round(bb.ymax - bb.ymin, 3),
+                round(bb.zmax - bb.zmin, 3),
+            )
+            return GeometryFeatures(
+                bbox=bbox,
+                volume=0.0,
+                surface_area=0.0,
+                body_count=body_count,
+                thin_walls=False,
+                holes=[],
+                symmetry_planes=[],
+                sharp_edges=False,
+                faces=[],
+            )
+
         bb = shape.BoundingBox()
         bbox = (
             round(bb.xmax - bb.xmin, 3),
             round(bb.ymax - bb.ymin, 3),
             round(bb.zmax - bb.zmin, 3),
         )
+        volume = shape.Volume()
+        area = shape.Area()
         return GeometryFeatures(
             bbox=bbox,
-            volume=round(shape.Volume(), 3),
-            surface_area=round(shape.Area(), 3),
-            body_count=len(wp.solids().vals()),
-            thin_walls=GeometryAnalyzer._detect_thin_walls(bbox, shape.Volume(), shape.Area()),
+            volume=round(volume, 3),
+            surface_area=round(area, 3),
+            body_count=body_count,
+            thin_walls=GeometryAnalyzer._detect_thin_walls(bbox, volume, area),
             holes=GeometryAnalyzer._detect_holes(wp),
             symmetry_planes=GeometryAnalyzer._detect_symmetry(shape, bbox),
             sharp_edges=GeometryAnalyzer._detect_sharp_edges(wp),
             faces=GeometryAnalyzer._label_faces(wp, bb, bbox),
         )
+
+    @staticmethod
+    def _fast_bbox(shape):
+        """Analytical bounding box (skip triangulation).
+
+        Avoids cadquery's mesh-based BoundingBox() which can take 100+ seconds
+        on multi-body assemblies; returns an object with xmin..zmax attributes
+        matching shape.BoundingBox()'s interface.
+        """
+        box = Bnd_Box()
+        BRepBndLib.Add_s(shape.wrapped, box, False)
+        xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
+        return _BBox(xmin, ymin, zmin, xmax, ymax, zmax)
 
     @staticmethod
     def _load_iges(path: str):

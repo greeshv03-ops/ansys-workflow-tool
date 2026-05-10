@@ -72,6 +72,30 @@ def test_box_with_hole_has_cylinder_face_label(box_with_hole_step):
     assert "Ø" in cyls[0].name
 
 
+@pytest.fixture(scope="session")
+def four_body_assembly_step(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("cad")
+    path = tmp / "assy.step"
+    parts = [
+        cq.Workplane("XY").box(20, 20, 20).translate((40 * i, 0, 0))
+        for i in range(4)
+    ]
+    assy = parts[0]
+    for p in parts[1:]:
+        assy = assy.add(p)
+    cq.exporters.export(assy, str(path))
+    return str(path)
+
+
+def test_assembly_skips_detailed_analysis(four_body_assembly_step):
+    result = GeometryAnalyzer.analyze(four_body_assembly_step)
+    assert result.body_count == 4
+    assert result.faces == []
+    assert result.holes == []
+    assert result.sharp_edges is False
+    assert result.bbox[0] > 0
+
+
 def test_iges_error_is_value_error_not_import_error(tmp_path):
     fake_iges = tmp_path / "fake.iges"
     fake_iges.write_text("fake content")

@@ -104,20 +104,28 @@ class UploadPage(QWizardPage):
         self._features = features
         self._progress.hide()
         self.wizard().setProperty("geometry_features", features)
-        tags = []
-        if features.thin_walls:
-            tags.append("Thin walls")
-        if features.holes:
-            tags.append(f"{len(features.holes)} hole(s)")
-        if features.symmetry_planes:
-            tags.append(f"Symmetry: {', '.join(features.symmetry_planes)}")
-        if features.sharp_edges:
-            tags.append("Sharp edges")
         b = features.bbox
-        self._info.setText(
-            f"Bbox: {b[0]:.1f} × {b[1]:.1f} × {b[2]:.1f} mm  |  Bodies: {features.body_count}\n"
-            + ("  |  ".join(tags) if tags else "No special features detected")
-        )
+        header = f"Bbox: {b[0]:.1f} × {b[1]:.1f} × {b[2]:.1f} mm  |  Bodies: {features.body_count}"
+        if features.body_count > 3 and not features.faces:
+            self._info.setText(
+                header
+                + "\nMulti-body assembly — detailed feature analysis skipped for speed."
+                + "\nYou can still proceed; on the BC page, type custom face names."
+            )
+        else:
+            tags = []
+            if features.thin_walls:
+                tags.append("Thin walls")
+            if features.holes:
+                tags.append(f"{len(features.holes)} hole(s)")
+            if features.symmetry_planes:
+                tags.append(f"Symmetry: {', '.join(features.symmetry_planes)}")
+            if features.sharp_edges:
+                tags.append("Sharp edges")
+            self._info.setText(
+                header + "\n"
+                + ("  |  ".join(tags) if tags else "No special features detected")
+            )
         self.completeChanged.emit()
 
     def _on_error(self, msg: str):
