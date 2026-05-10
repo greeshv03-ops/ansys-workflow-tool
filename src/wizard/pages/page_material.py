@@ -132,8 +132,10 @@ class MaterialPage(QWizardPage):
             "body_ids": ids,
             "material_id": m["id"],
             "material_name": m["name"],
+            "material_category": m.get("category", ""),
         }
         self._refresh_body_row(self._selected_body_name)
+        self._viewer.set_body_material_category(ids, m.get("category", ""))
         self._save_to_wizard()
         self.completeChanged.emit()
 
