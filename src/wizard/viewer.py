@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 _DEFAULT_COLOR = "#a8b2bf"
 _HIGHLIGHT_COLOR = "#ffb347"
+_TESS_TOL_LINEAR = 0.1   # mm
+_TESS_TOL_ANGULAR = 0.2  # rad
 
 
 class GeometryViewer(QWidget):
@@ -167,9 +169,12 @@ def _solid_to_mesh(named_solid) -> pv.PolyData | None:
         face_meshes = []
         for face_idx, face in enumerate(named_solid.shape.Faces()):
             try:
-                pd = face.toVtkPolyData()
+                pd = face.toVtkPolyData(_TESS_TOL_LINEAR, _TESS_TOL_ANGULAR)
             except Exception:
-                continue
+                try:
+                    pd = face.toVtkPolyData()
+                except Exception:
+                    continue
             if pd is None or pd.GetNumberOfCells() == 0:
                 continue
             n = pd.GetNumberOfCells()
@@ -182,7 +187,10 @@ def _solid_to_mesh(named_solid) -> pv.PolyData | None:
             face_meshes.append(pv.wrap(pd))
 
         if not face_meshes:
-            full_pd = named_solid.shape.toVtkPolyData()
+            try:
+                full_pd = named_solid.shape.toVtkPolyData(_TESS_TOL_LINEAR, _TESS_TOL_ANGULAR)
+            except Exception:
+                full_pd = named_solid.shape.toVtkPolyData()
             mesh = pv.wrap(full_pd) if full_pd else None
         else:
             mesh = face_meshes[0].merge(face_meshes[1:]) if len(face_meshes) > 1 else face_meshes[0]

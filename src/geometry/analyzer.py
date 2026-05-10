@@ -23,6 +23,7 @@ try:
     from OCP.TDF import TDF_LabelSequence
     from OCP.XCAFDoc import XCAFDoc_DocumentTool
     from OCP.TDataStd import TDataStd_Name
+    from OCP.TopLoc import TopLoc_Location
     _STEP_CAF_AVAILABLE = True
 except ImportError:
     _STEP_CAF_AVAILABLE = False
@@ -158,8 +159,9 @@ class GeometryAnalyzer:
 
         named: list[NamedSolid] = []
         counter = [0]
+        identity = TopLoc_Location()
         for i in range(1, free_labels.Length() + 1):
-            _walk_assembly(shape_tool, free_labels.Value(i), named, counter, with_volume)
+            _walk_assembly(shape_tool, free_labels.Value(i), identity, named, counter, with_volume)
 
         if not named:
             wp = cq.importers.importStep(path)
@@ -375,32 +377,42 @@ def _label_name(label) -> str:
     return ""
 
 
-def _walk_assembly(shape_tool, label, named, counter, with_volume) -> None:
+def _walk_assembly(shape_tool, label, location, named, counter, with_volume) -> None:
     """Recursively walk a STEP assembly label tree, appending one NamedSolid per leaf solid.
 
-    Each component (instance) gets the name of the part it references, so all
-    instances of "Hex Bolt M8" share a name and the material UI can group them.
+    Each component carries a TopLoc_Location that's accumulated as we descend into
+    nested assemblies; at a leaf the resolved location is applied to the part shape
+    so all instances end up at their real positions instead of stacked at the part
+    origin. Names follow the referred part so all 16 instances of a "Hex Bolt M8"
+    share a name and the material UI can group them.
     """
     if shape_tool.IsAssembly_s(label):
         components = TDF_LabelSequence()
         shape_tool.GetComponents_s(label, components)
         for i in range(1, components.Length() + 1):
             comp_label = components.Value(i)
+            comp_loc = location
+            try:
+                local_loc = shape_tool.GetLocation_s(comp_label)
+                comp_loc = location.Multiplied(local_loc)
+            except Exception:
+                pass
             try:
                 from OCP.TDF import TDF_Label
                 ref_label = TDF_Label()
                 if shape_tool.IsReference_s(comp_label) and shape_tool.GetReferredShape_s(comp_label, ref_label):
-                    _walk_assembly(shape_tool, ref_label, named, counter, with_volume)
+                    _walk_assembly(shape_tool, ref_label, comp_loc, named, counter, with_volume)
                     continue
             except Exception:
                 pass
-            _walk_assembly(shape_tool, comp_label, named, counter, with_volume)
+            _walk_assembly(shape_tool, comp_label, comp_loc, named, counter, with_volume)
         return
 
     name = _label_name(label) or f"Body {counter[0] + 1}"
     try:
         shape = shape_tool.GetShape_s(label)
-        for solid in cq.Workplane().newObject([cq.Shape(shape)]).solids().vals():
+        located = shape.Located(location) if not location.IsIdentity() else shape
+        for solid in cq.Workplane().newObject([cq.Shape(located)]).solids().vals():
             named.append(_make_named_solid(counter[0], name, solid, with_volume))
             counter[0] += 1
     except Exception:
