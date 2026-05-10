@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QLineEdit, QDialogButtonBox, QFormLayout
 )
 
-from src.models import BoundaryCondition, SimulationType
+from src.models import BoundaryCondition, FaceLabel, SimulationType
 
 _SUPPORTS = ["Fixed", "Frictionless", "Displacement", "Symmetric"]
 _LOADS    = ["Force", "Pressure", "Remote Force", "Moment"]
@@ -13,14 +13,19 @@ _THERMAL  = ["Temperature", "Convection", "Heat Flux"]
 
 class _BCDialog(QDialog):
 
-    def __init__(self, bc_types: list[str], parent=None):
+    def __init__(self, bc_types: list[str], face_labels: list[FaceLabel], parent=None):
         super().__init__(parent)
         self.setWindowTitle("Add Boundary Condition")
         form = QFormLayout(self)
         self._type = QComboBox()
         self._type.addItems(bc_types)
-        self._target = QLineEdit()
-        self._target.setPlaceholderText("e.g. Face A, Bottom face")
+        self._target = QComboBox()
+        self._target.setEditable(True)
+        if face_labels:
+            for fl in face_labels:
+                self._target.addItem(fl.name)
+        else:
+            self._target.lineEdit().setPlaceholderText("e.g. Top face, Bottom face")
         self._mag = QLineEdit()
         self._mag.setPlaceholderText("Leave blank for Fixed / Frictionless")
         self._dir = QComboBox()
@@ -43,7 +48,7 @@ class _BCDialog(QDialog):
         mag_text = self._mag.text().strip()
         return BoundaryCondition(
             bc_type=self._type.currentText(),
-            target=self._target.text(),
+            target=self._target.currentText(),
             magnitude=float(mag_text) if mag_text else None,
             direction=self._dir.currentText() or None,
             unit=self._unit.currentText(),
@@ -55,7 +60,7 @@ class BCsPage(QWizardPage):
     def __init__(self):
         super().__init__()
         self.setTitle("Step 4 — Boundary Conditions")
-        self.setSubTitle("Add supports and loads. Name faces/edges as you will identify them in Mechanical.")
+        self.setSubTitle("Add supports and loads. Pick a face from the auto-detected list, or type a custom name.")
         self._bcs: list[BoundaryCondition] = []
         self._build_ui()
 
@@ -102,7 +107,9 @@ class BCsPage(QWizardPage):
 
     def _add(self, section: str, lw: QListWidget, bc_types):
         types = bc_types if bc_types is not None else self._load_types()
-        dlg = _BCDialog(types, self)
+        features = self.wizard().property("geometry_features")
+        face_labels = features.faces if features and features.faces else []
+        dlg = _BCDialog(types, face_labels, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         bc = dlg.get_bc()

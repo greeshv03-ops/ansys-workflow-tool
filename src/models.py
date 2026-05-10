@@ -16,6 +16,16 @@ class ElementType(Enum):
 
 
 @dataclass
+class FaceLabel:
+    name: str
+    face_type: str
+    area: float
+    centroid: tuple[float, float, float]
+    normal: Optional[tuple[float, float, float]] = None
+    radius: Optional[float] = None
+
+
+@dataclass
 class GeometryFeatures:
     bbox: tuple[float, float, float]
     volume: float
@@ -25,6 +35,7 @@ class GeometryFeatures:
     holes: list[dict]
     symmetry_planes: list[str]
     sharp_edges: bool
+    faces: list[FaceLabel] = field(default_factory=list)
 
 
 @dataclass

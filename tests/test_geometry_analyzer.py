@@ -45,6 +45,33 @@ def test_unsupported_format_raises():
     with pytest.raises(ValueError, match="Unsupported"):
         GeometryAnalyzer.analyze("model.obj")
 
+def test_box_face_labels_cover_six_directions(simple_box_step):
+    result = GeometryAnalyzer.analyze(simple_box_step)
+    directions = {label.name.split()[0] for label in result.faces if label.face_type == "planar"}
+    assert directions == {"+X", "-X", "+Y", "-Y", "+Z", "-Z"}
+
+
+def test_box_face_labels_have_position_word(simple_box_step):
+    result = GeometryAnalyzer.analyze(simple_box_step)
+    names = [label.name for label in result.faces]
+    assert any("top" in n for n in names)
+    assert any("bottom" in n for n in names)
+
+
+def test_face_labels_sorted_by_area_desc(simple_box_step):
+    result = GeometryAnalyzer.analyze(simple_box_step)
+    areas = [label.area for label in result.faces]
+    assert areas == sorted(areas, reverse=True)
+
+
+def test_box_with_hole_has_cylinder_face_label(box_with_hole_step):
+    result = GeometryAnalyzer.analyze(box_with_hole_step)
+    cyls = [label for label in result.faces if label.face_type == "cylindrical"]
+    assert len(cyls) >= 1
+    assert cyls[0].radius is not None
+    assert "Ø" in cyls[0].name
+
+
 def test_iges_error_is_value_error_not_import_error(tmp_path):
     fake_iges = tmp_path / "fake.iges"
     fake_iges.write_text("fake content")
