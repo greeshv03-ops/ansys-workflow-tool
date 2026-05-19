@@ -118,6 +118,32 @@ seeded entries across 12 categories. Search/filter and `get_by_id` only.
   appear in `_detect_holes` but were silently failing; all OCP imports now use
   the canonical single-prefix path.
 
+## Startup / shutdown: VTK + Qt OpenGL handling
+
+`src/main.py` performs two OpenGL setup steps that are essential — do not
+remove or reorder them:
+
+1. **Before `QApplication`**: a default `QSurfaceFormat` (OpenGL 3.2 Core,
+   24-bit depth, 8-bit stencil) is installed and `AA_ShareOpenGLContexts` is
+   set. Without this, the two embedded `QtInteractor`s (one in `page_upload`
+   and one in `page_material`) negotiate incompatible pixel formats vs. Qt's
+   widget HDCs and `wglMakeCurrent` fails with `ERROR_INCORRECT_PIXEL_TYPE`
+   (2004) on every paint.
+2. **`app.aboutToQuit`** is connected to `vtkObject.GlobalWarningDisplayOff()`.
+   This silences a known VTK destructor-order issue: `vtkWin32OpenGLRenderWindow`
+   calls `wglMakeCurrent` during its destructor after Qt has already torn down
+   the HDC, then mis-formats the resulting `DWORD` error code through
+   `FormatMessageW` and prints garbled Unicode to stderr. The errors are
+   cosmetic — there is nothing left to render — but they look alarming.
+   Silencing only at quit time keeps real runtime VTK warnings visible.
+
+**Note for future sessions**: an earlier memory entry (May 13, 2026)
+labelled this as "OpenGL Rendering Failure / driver issue" and called the
+GUI blocked. That diagnosis was wrong. The GPU and drivers are fine
+(verified via standalone VTK probe — OpenGL 4.6 Compatibility on the AMD
+Radeon 780M); the noise was cosmetic shutdown spam and the wizard always
+ran. Fixed 2026-05-18.
+
 ## How to resume in a new session
 
 In your new Claude Code session, tell Claude:
