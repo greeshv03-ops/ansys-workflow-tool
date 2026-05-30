@@ -18,7 +18,7 @@ Workbench journal file + HTML settings summary as output.
 - Spec: `docs/superpowers/specs/2026-05-09-ansys-workflow-tool-design.md`
 - Plan: `docs/superpowers/plans/2026-05-09-ansys-workflow-tool.md`
 - Run: `python -m src.main`
-- Tests: `pytest -q` — 40 tests pass
+- Tests: `pytest -q` — 46 tests pass
 
 ## Current state
 
@@ -92,10 +92,18 @@ seeded entries across 12 categories. Search/filter and `get_by_id` only.
 
 ## What still needs doing
 
-1. **Per-body material output in the `.wbjn` templates.** The summary HTML
-   already shows per-body materials, but the three journal templates still
-   emit a single material assignment. They need to loop over
-   `config.body_materials` and emit one assignment block per body group.
+1. ~~**Per-body material output in the `.wbjn` templates.**~~ **DONE (2026-05-30).**
+   `JournalGenerator.write` now resolves each unique assigned material from the
+   SQLite `MaterialDatabase` (dedup by `material_id`, first-seen order) and
+   passes formatted Engineering Data properties to the templates. A shared
+   `templates/_materials.wbjn.j2` macro `engineering_data(system_var, materials,
+   thermal=False)` emits one `CreateMaterial` block per unique material with
+   Density, Elasticity (Young's Modulus in Pa + Poisson's Ratio), and — when
+   `thermal=True` — Coefficient of Thermal Expansion, Thermal Conductivity, and
+   Specific Heat. Static/transient pass `system1`; thermal passes `systemTH,
+   thermal=True`. Per-body material→geometry *assignment* still happens in the
+   downstream `mechanical_setup.py` Mechanical step the templates reference.
+   Covered by 6 new tests in `tests/test_journal_generator.py`.
 2. **Face picking on the BC page.** The BC dialog accepts face names from a
    dropdown auto-populated for single-body parts, but there's no
    "click a face in the viewer → fill the BC target" wiring yet. The viewer

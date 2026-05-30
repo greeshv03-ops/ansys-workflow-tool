@@ -1,0 +1,34 @@
+{% macro engineering_data(system_var, materials, thermal=False) -%}
+{% if materials %}
+# --- Engineering Data: per-body material definitions ---
+engineeringData = {{ system_var }}.GetContainer(ComponentName="Engineering Data")
+{% for m in materials %}
+matl{{ loop.index }} = engineeringData.CreateMaterial(Name="{{ m.name }}")
+matl{{ loop.index }}.CreateProperty(Name="Density")
+matl{{ loop.index }}.GetProperty(Name="Density").SetData(
+    Variables=["Density"], Values=[["{{ m.density }}"]])
+matl{{ loop.index }}.CreateProperty(Name="Elasticity", Behavior="Isotropic")
+matl{{ loop.index }}.GetProperty(Name="Elasticity").SetData(
+    Variables=["Young's Modulus"], Values=[["{{ m.youngs_modulus }}"]])
+matl{{ loop.index }}.GetProperty(Name="Elasticity").SetData(
+    Variables=["Poisson's Ratio"], Values=[["{{ m.poissons_ratio }}"]])
+{% if thermal %}
+{% if m.thermal_expansion %}
+matl{{ loop.index }}.CreateProperty(Name="Coefficient of Thermal Expansion", Definition="Secant", Behavior="Isotropic")
+matl{{ loop.index }}.GetProperty(Name="Coefficient of Thermal Expansion").SetData(
+    Variables=["Coefficient of Thermal Expansion"], Values=[["{{ m.thermal_expansion }}"]])
+{% endif %}
+{% if m.thermal_conductivity %}
+matl{{ loop.index }}.CreateProperty(Name="Thermal Conductivity")
+matl{{ loop.index }}.GetProperty(Name="Thermal Conductivity").SetData(
+    Variables=["Thermal Conductivity"], Values=[["{{ m.thermal_conductivity }}"]])
+{% endif %}
+{% if m.specific_heat %}
+matl{{ loop.index }}.CreateProperty(Name="Specific Heat")
+matl{{ loop.index }}.GetProperty(Name="Specific Heat").SetData(
+    Variables=["Specific Heat"], Values=[["{{ m.specific_heat }}"]])
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{%- endmacro %}
