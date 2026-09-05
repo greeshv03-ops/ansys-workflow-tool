@@ -31,6 +31,7 @@ CALLS_PER_SESSION = int(os.environ.get("CALLS_PER_SESSION", "10"))
 SESSION_CAP_PER_HOUR = int(os.environ.get("SESSION_CAP_PER_HOUR", "50"))
 SESSION_TTL_S = 3600
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+UPLOAD_CHUNK_BYTES = 1024 * 1024  # stream the upload in 1 MiB chunks so a large body never sits fully in memory
 LOG_PATH = DEFAULT_LOG
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -123,12 +124,21 @@ async def create_session(file: UploadFile = File(...)):
     name = (file.filename or "").lower()
     if not name.endswith((".step", ".stp")):
         raise HTTPException(400, "Only STEP files (.step, .stp) are accepted on this path.")
-    data = await file.read()
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, f"File is {len(data) / 1e6:.1f} MB; the limit is 20 MB.")
     fd, path = tempfile.mkstemp(suffix=".step")
-    with os.fdopen(fd, "wb") as fh:
-        fh.write(data)
+    total = 0
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            while True:
+                chunk = await file.read(UPLOAD_CHUNK_BYTES)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_UPLOAD_BYTES:
+                    raise HTTPException(413, f"File is {total / 1e6:.1f} MB; the limit is 20 MB.")
+                fh.write(chunk)
+    except HTTPException:
+        os.remove(path)
+        raise
     try:
         features, solids = GeometryAnalyzer.analyze_with_solids(path)
         summary = build_summary(features, [ns.body for ns in solids])
