@@ -90,9 +90,10 @@ def test_propose_logs_jsonl(summary, proposal, tmp_path):
     rows = [json.loads(line) for line in log.read_text().splitlines()]
     assert len(rows) == 1
     row = rows[0]
-    for key in ("timestamp", "session_id", "model", "input_tokens", "output_tokens", "cache_read_tokens",
+    for key in ("kind", "timestamp", "session_id", "model", "input_tokens", "output_tokens", "cache_read_tokens",
                 "latency_s", "playbook_hash", "brief", "summary_hash", "proposal"):
         assert key in row
+    assert row["kind"] == "call"
     assert row["session_id"] == "abc" and row["proposal"]["materials"][0]["material_id"] == 1
 
 

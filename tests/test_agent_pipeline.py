@@ -79,11 +79,55 @@ def test_revision_passes_prior_and_instruction(summary, tmp_path):
     assert kw["prior"] is prior and kw["instruction"] == "double the load" and kw["feedback"] is None
 
 
-def test_validator_outcome_written_to_log(summary, tmp_path):
-    from src.agent.proposer import propose as real_propose  # noqa: F401  (ensures import path exists)
+def test_validator_outcome_appends_a_new_row(tmp_path):
     from src.agent.pipeline import append_validator_outcome
     log = tmp_path / "l.jsonl"
-    log.write_text(json.dumps({"session_id": "s", "validator": None}) + "\n")
+    log.write_text(json.dumps({"kind": "call", "session_id": "s"}) + "\n")
     append_validator_outcome(log, "s", ["rule2: x"])
-    row = json.loads(log.read_text().splitlines()[-1])
-    assert row["validator"] == {"valid": False, "messages": ["rule2: x"]}
+    rows = [json.loads(line) for line in log.read_text().splitlines()]
+    assert len(rows) == 2
+    validator_row = rows[-1]
+    assert validator_row["kind"] == "validator"
+    assert validator_row["session_id"] == "s"
+    assert validator_row["validator"] == {"valid": False, "messages": ["rule2: x"]}
+    # the original call row survives untouched
+    assert rows[0] == {"kind": "call", "session_id": "s"}
+
+
+def test_interleaved_sessions_produce_four_rows_with_correct_session_ids(tmp_path):
+    from src.agent.proposer import append_jsonl
+    from src.agent.pipeline import append_validator_outcome
+    log = tmp_path / "l.jsonl"
+    # A call, B call, A outcome, B outcome
+    append_jsonl(log, {"kind": "call", "session_id": "A"})
+    append_jsonl(log, {"kind": "call", "session_id": "B"})
+    append_validator_outcome(log, "A", [])
+    append_validator_outcome(log, "B", ["rule2: x"])
+    rows = [json.loads(line) for line in log.read_text().splitlines()]
+    assert len(rows) == 4
+    validator_rows = [r for r in rows if r["kind"] == "validator"]
+    assert len(validator_rows) == 2
+    a_outcome = next(r for r in validator_rows if r["session_id"] == "A")
+    b_outcome = next(r for r in validator_rows if r["session_id"] == "B")
+    assert a_outcome["validator"] == {"valid": True, "messages": []}
+    assert b_outcome["validator"] == {"valid": False, "messages": ["rule2: x"]}
+
+
+def test_append_jsonl_is_safe_under_thread_contention(tmp_path):
+    import threading
+    from src.agent.proposer import append_jsonl
+    log = tmp_path / "concurrent.jsonl"
+    n = 20
+
+    def worker(i):
+        append_jsonl(log, {"kind": "call", "session_id": str(i)})
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == n
+    rows = [json.loads(line) for line in lines]  # every row parses cleanly: no interleaved writes
+    assert sorted(int(r["session_id"]) for r in rows) == list(range(n))

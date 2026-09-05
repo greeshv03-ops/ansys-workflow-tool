@@ -1,12 +1,12 @@
 """propose → validate → at most one revision call. No third attempt."""
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from src.agent.proposer import DEFAULT_LOG, ProposalResult, propose
+from src.agent.proposer import DEFAULT_LOG, ProposalResult, append_jsonl, propose
 from src.agent.schema import GeometrySummary, SetupProposal
 from src.agent.validator import validate
 from src.materials.database import MaterialDatabase
@@ -51,18 +51,18 @@ def run_pipeline(summary: GeometrySummary, brief: str, db: MaterialDatabase,
 
 
 def append_validator_outcome(log_path: Path, session_id: str, messages: list[str]) -> None:
-    """Fill the `validator` field of the most recent log row for this session."""
-    log_path = Path(log_path)
-    if not log_path.exists():
-        return
-    lines = log_path.read_text(encoding="utf-8").splitlines()
-    for i in range(len(lines) - 1, -1, -1):
-        try:
-            row = json.loads(lines[i])
-        except json.JSONDecodeError:
-            continue
-        if row.get("session_id") == session_id and row.get("validator") is None:
-            row["validator"] = {"valid": not messages, "messages": list(messages)}
-            lines[i] = json.dumps(row)
-            break
-    log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    """Append a new validator-outcome row for this session.
+
+    The log is append-only (see src.agent.proposer.append_jsonl): rather than
+    reading the whole file, mutating the matching call row, and rewriting it
+    (which truncates the file and loses any row appended concurrently by
+    another session's request), each validator outcome is its own row,
+    correlated to its call by session_id.
+    """
+    row = {
+        "kind": "validator",
+        "session_id": session_id,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "validator": {"valid": not messages, "messages": list(messages)},
+    }
+    append_jsonl(log_path, row)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -16,6 +17,25 @@ MODEL = "claude-opus-5"
 MAX_TOKENS = 16000
 DEFAULT_LOG = Path("logs/proposals.jsonl")
 _PLAYBOOK_PATH = Path(__file__).parent / "playbook.md"
+
+_LOG_LOCK = threading.Lock()
+
+
+def append_jsonl(path: Path, row: dict) -> None:
+    """Append one JSON row to a JSONL log.
+
+    FastAPI runs the sync /propose and /revise handlers in a threadpool, so
+    multiple requests can log concurrently; a bare read-modify-write (or even
+    a bare open/append without the lock) can interleave and corrupt the file
+    under contention. All writers to the proposal log go through this one
+    helper, serialised by a single module-level lock, so the log is safe to
+    treat as append-only.
+    """
+    path = Path(path)
+    with _LOG_LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row) + "\n")
 
 _ROLE = (
     "You are a senior structural analyst setting up Static Structural finite element runs in ANSYS "
@@ -113,6 +133,7 @@ def propose(summary: GeometrySummary, brief: str, playbook: Optional[str] = None
 def _log(result: ProposalResult, summary: GeometrySummary, brief: str, model: str,
          session_id: str, log_path: Path) -> None:
     row = {
+        "kind": "call",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "session_id": session_id,
         "model": model,
@@ -124,9 +145,5 @@ def _log(result: ProposalResult, summary: GeometrySummary, brief: str, model: st
         "brief": brief,
         "summary_hash": _summary_hash(summary),
         "proposal": result.proposal.model_dump(),
-        "validator": None,
     }
-    log_path = Path(log_path)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(row) + "\n")
+    append_jsonl(log_path, row)
