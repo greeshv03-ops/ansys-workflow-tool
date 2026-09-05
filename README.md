@@ -11,7 +11,7 @@ Both produce the same outputs: a Workbench journal (`.wbjn`) that applies every 
 
 Upload a STEP file, describe the part's job in a sentence or two, and get a complete ANSYS Static Structural setup: materials, supports, loads, load cases, and mesh, each with a rationale. A deterministic validator checks the proposal, a render shows which faces carry supports and loads, and the download is a Workbench journal plus an HTML report. An eval harness scores the agent against ten reference parts.
 
-Live demo: not yet deployed
+Live demo: https://fea-setup-agent.fly.dev (scales to zero when idle, so the first request after a quiet spell takes about 20 seconds)
 
 ### Architecture
 
@@ -68,13 +68,14 @@ On Linux without a display, start Xvfb first and export DISPLAY, or just use the
 
 ## Deploy
 
-Pick Fly.io or Render. For Fly:
+The demo runs on Fly.io from the Dockerfile. `fly.toml` in the repo sets the port, a 2 GB shared-CPU machine (cadquery plus VTK need it), and scale-to-zero.
 
-    fly launch --no-deploy
-    fly secrets set ANTHROPIC_API_KEY=...
-    fly deploy
+    fly launch --no-deploy --copy-config    # first time only, creates the app from fly.toml
+    fly secrets set ANTHROPIC_API_KEY=...   # the only secret
+    fly deploy --remote-only
+    fly scale count 1                       # sessions live in process memory, so run exactly one machine
 
-Accept the generated `fly.toml` with internal port 8000. Record the public URL in this README. Memory: request at least 2 GB; cadquery plus vtk needs it.
+Optional cost guards: `fly secrets set CALLS_PER_SESSION=5 SESSION_CAP_PER_HOUR=10`, and a monthly spend limit in the Anthropic Console.
 
 ## Tests and evals
 
