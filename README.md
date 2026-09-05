@@ -35,6 +35,8 @@ Latest run: 2026-09-05, playbook `caf827b46422`, 3 runs per part, claude-opus-5 
 | weldment_tee | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | **all** | **1.00** | **1.00** | **1.00** | **1.00** | **0.90** | **0.98** |
 
+Follow-up check after adding the mesh-refinement rule to the playbook (`abbce1e2fb30`, 1 run per part, 10 calls): 1.00 on every column, including `first_pass_valid`, so no proposal needed the validator retry. See `evals/results/2026-09-05_abbce1e2fb30.md`.
+
 Scores are 0 to 1. `load_cases`, `supports`, `loads` are the fraction of reference items matched (by id or an accepted alternative). `material` is family match. `first_pass_valid` is whether the validator passed without a retry. Three runs per part; ± is half the spread.
 
 ### Screenshots
