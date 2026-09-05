@@ -1,8 +1,35 @@
 {
   "material_family": "Steel",
-  "supports": [{"type": "fixed", "targets": ["label:+X face"], "alternatives": ["label:Cyl shaft #1"]}],
-  "loads": [{"type": "bearing_load", "targets": ["label:Cyl shaft #2"], "alternatives": ["label:Cyl"]}],
+  "supports": [
+    {
+      "type": "fixed",
+      "targets": [
+        "label:+X face"
+      ],
+      "alternatives": [
+        "label:Cyl shaft #1"
+      ]
+    }
+  ],
+  "loads": [
+    {
+      "type": "bearing_load",
+      "targets": [
+        "label:Cyl shaft #2"
+      ],
+      "alternatives": [
+        "label:Cyl"
+      ]
+    }
+  ],
   "load_cases": [
-    {"name": "rated", "acceleration_g": [0, 0, 0]}
+    {
+      "name": "rated",
+      "acceleration_g": [
+        0,
+        0,
+        -1
+      ]
+    }
   ]
 }

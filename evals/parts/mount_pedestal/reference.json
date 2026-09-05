@@ -1,10 +1,51 @@
 {
   "material_family": "Steel",
-  "supports": [{"type": "fixed", "targets": ["hole_group:4"], "alternatives": ["label:-Z face"]}],
-  "loads": [{"type": "force", "targets": ["label:+Z face"], "alternatives": ["label:Cyl hole"]}],
+  "supports": [
+    {
+      "type": "fixed",
+      "targets": [
+        "hole_group:4"
+      ],
+      "alternatives": [
+        "label:-Z face"
+      ]
+    }
+  ],
+  "loads": [
+    {
+      "type": "force",
+      "targets": [
+        "label:+Z face"
+      ],
+      "alternatives": [
+        "label:Cyl hole"
+      ]
+    }
+  ],
   "load_cases": [
-    {"name": "static", "acceleration_g": [0, 0, -1]},
-    {"name": "heave", "acceleration_g": [0, 0, -2]},
-    {"name": "lateral", "acceleration_g": [1, 0, 0]}
+    {
+      "name": "static",
+      "acceleration_g": [
+        0,
+        0,
+        -1
+      ]
+    },
+    {
+      "name": "heave",
+      "acceleration_g": [
+        0,
+        0,
+        -2
+      ]
+    },
+    {
+      "name": "lateral",
+      "acceleration_g": [
+        1,
+        0,
+        -1
+      ]
+    }
   ]
 }

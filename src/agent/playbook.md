@@ -20,7 +20,7 @@ Pick the faces that constrain the part the way the real assembly does. A fixed s
 
 ## Load application
 
-Force for a resultant applied through a face. Pressure for distributed loads on an area (MPa). Remote force when the load acts at a point away from the part, such as a mass on a lever arm. Bearing load for a shaft in a bore. Directions are unit vectors in the summary axes; gravity is usually -Z unless the summary's labels show otherwise. Inertial cases go in `acceleration_g`, not as forces; the solver applies them to every body.
+Force for a resultant applied through a face. Pressure for distributed loads on an area (MPa). Remote force when the load acts at a point away from the part, such as a mass on a lever arm. Bearing load for a shaft in a bore. Directions are unit vectors in the summary axes; gravity is usually -Z unless the summary's labels show otherwise. Inertial cases go in `acceleration_g`, not as forces; the solver applies them to every body. A stated vertical g level (heave, shock, drop) is the total vertical acceleration including gravity, so 2 g heave is `acceleration_g` z = -2, not -3. A stated lateral g level is combined with 1 g gravity in the same case (1 g lateral is x = 1, z = -1). Static cases always include 1 g gravity unless the brief says the part is weightless or in orbit. An overload factor scales the load magnitude, not the acceleration.
 
 ## Magnitudes
 
