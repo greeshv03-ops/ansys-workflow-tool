@@ -23,6 +23,27 @@ def plate_2holes_step(tmp_path_factory):
     return str(path)
 
 
+@pytest.fixture(scope="session")
+def four_solid_step(tmp_path_factory):
+    """Four separate boxes exported together, above the agent path's 3-solid limit."""
+    path = tmp_path_factory.mktemp("cad") / "four_solids.step"
+    parts = [cq.Workplane("XY").box(20, 20, 20).translate((40 * i, 0, 0)) for i in range(4)]
+    assy = parts[0]
+    for p in parts[1:]:
+        assy = assy.add(p)
+    cq.exporters.export(assy, str(path))
+    return str(path)
+
+
+def test_multi_solid_step_raises_value_error_with_solid_count(four_solid_step):
+    features, solids = GeometryAnalyzer.analyze_with_solids(four_solid_step)
+    assert features.faces == []
+    with pytest.raises(ValueError, match="solids") as excinfo:
+        build_summary(features, [ns.body for ns in solids])
+    assert "4" in str(excinfo.value)
+    assert "3" in str(excinfo.value)
+
+
 def test_analyzer_records_cylinder_axis(plate_2holes_step):
     features = GeometryAnalyzer.analyze(plate_2holes_step)
     cyl = [f for f in features.faces if f.face_type == "cylindrical"]

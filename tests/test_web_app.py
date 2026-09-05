@@ -20,6 +20,18 @@ def step_bytes(tmp_path_factory):
     return path.read_bytes()
 
 
+@pytest.fixture(scope="session")
+def four_solid_step_bytes(tmp_path_factory):
+    """Four separate boxes exported together, above the agent path's 3-solid limit."""
+    path = tmp_path_factory.mktemp("cad") / "four_solids.step"
+    parts = [cq.Workplane("XY").box(20, 20, 20).translate((40 * i, 0, 0)) for i in range(4)]
+    assy = parts[0]
+    for p in parts[1:]:
+        assy = assy.add(p)
+    cq.exporters.export(assy, str(path))
+    return path.read_bytes()
+
+
 def proposal_for(summary, bad=False):
     top = next(f.id for f in summary.faces if f.label.startswith("+Z"))
     bottom = next(f.id for f in summary.faces if f.label.startswith("-Z"))
@@ -76,6 +88,13 @@ def test_upload_rejects_oversize(client, monkeypatch):
     monkeypatch.setattr(webapp, "MAX_UPLOAD_BYTES", 10)
     r = client.post("/session", files={"file": ("big.step", b"0" * 11, "application/octet-stream")})
     assert r.status_code == 413
+
+
+def test_upload_rejects_multi_solid_step(client, four_solid_step_bytes):
+    r = upload(client, four_solid_step_bytes, name="four_solids.step")
+    assert r.status_code == 400
+    assert "solids" in r.json()["detail"]
+    assert webapp.SESSIONS == {}
 
 
 def test_propose_returns_valid_proposal_and_render(client, step_bytes):

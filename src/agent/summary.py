@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 
 from src.agent.schema import GeometrySummary, HoleGroup, SummaryBody, SummaryFace, Vec3
+from src.geometry.analyzer import _MAX_DETAILED_BODIES
 from src.models import Body, FaceLabel, GeometryFeatures
 
 FACE_CAP = 200
@@ -17,6 +18,11 @@ UNITS = {"length": "mm", "force": "N", "mass": "kg"}
 
 
 def build_summary(features: GeometryFeatures, bodies: list[Body]) -> GeometrySummary:
+    if not features.faces:
+        raise ValueError(
+            f"STEP has {features.body_count} solids; the agent path supports "
+            f"up to {_MAX_DETAILED_BODIES} solids with detailed faces"
+        )
     labels = list(features.faces)
 
     groups = _group_holes(labels)
