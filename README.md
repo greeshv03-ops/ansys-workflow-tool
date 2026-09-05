@@ -39,7 +39,17 @@ Scores are 0 to 1. `load_cases`, `supports`, `loads` are the fraction of referen
 
 ### Screenshots
 
-Screenshots (render with colored faces, proposal tables, report HTML) will be added after the first live run.
+Flat aluminum lid: six screw holes fixed (blue), 2 kPa wind pressure on the top face (orange).
+
+![render](docs/screenshots/render.png)
+
+Proposal for the L-bracket eval part: materials, supports, loads, load cases (including a 20 g shock), mesh, assumptions, and questions for the engineer.
+
+![proposal](docs/screenshots/proposal.png)
+
+The HTML report that ships in the download zip next to the Workbench journal and the STEP file.
+
+![report](docs/screenshots/report.png)
 
 ## Run the agent locally
 
