@@ -154,3 +154,33 @@ def test_journal_thermal_includes_thermal_properties(thermal_config, tmp_path):
     assert "Coefficient of Thermal Expansion" in text
     assert "Thermal Conductivity" in text
     assert "Specific Heat" in text
+
+
+def test_journal_single_system_when_no_load_cases(config, tmp_path):
+    wbjn, _ = JournalGenerator.write(config, str(tmp_path))
+    text = Path(wbjn).read_text()
+    assert text.count("CreateSystem(") == 1
+    assert "ComponentsToShare" not in text
+
+
+def test_journal_one_system_per_load_case(config, tmp_path):
+    from dataclasses import replace
+    from src.models import LoadCaseBlock
+    cases = [
+        LoadCaseBlock(name="static 1g", boundary_conditions=[
+            BoundaryCondition(bc_type="Fixed Support", target="Cyl hole #1"),
+            BoundaryCondition(bc_type="Acceleration", target="All Bodies", magnitude=9806.65, direction="(0, 0, -1)", unit="mm/s^2")]),
+        LoadCaseBlock(name="shock 5g", boundary_conditions=[
+            BoundaryCondition(bc_type="Fixed Support", target="Cyl hole #1"),
+            BoundaryCondition(bc_type="Force", target="+X face", magnitude=500.0, direction="(0, 0, -1)")]),
+    ]
+    multi = replace(config, load_cases=cases)
+    wbjn, _ = JournalGenerator.write(multi, str(tmp_path))
+    text = Path(wbjn).read_text()
+    assert text.count("CreateSystem(") == 2
+    assert 'system1.DisplayText = "static 1g"' in text
+    assert 'system2.DisplayText = "shock 5g"' in text
+    assert text.count("ComponentsToShare") == 1
+    assert 'GetComponent(Name="Model")' in text
+    assert "Force on +X face: 500 N along (0, 0, -1)" in text
+    assert text.count('CreateMaterial(Name="Structural Steel")') == 1

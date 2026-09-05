@@ -17,6 +17,13 @@ _TEMPLATE_MAP = {
 }
 
 
+def _num(value) -> str:
+    return f"{value:g}"
+
+
+_ENV.filters["num"] = _num
+
+
 def _fmt(value, unit: str = "") -> str:
     """Format a numeric property value with an optional Workbench unit suffix."""
     text = f"{value:g}"
@@ -65,6 +72,7 @@ class JournalGenerator:
         content = _ENV.get_template(template_name).render(
             config=config,
             materials=materials,
+            load_cases=getattr(config, "load_cases", []),
             generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         )
         out = Path(output_dir)
