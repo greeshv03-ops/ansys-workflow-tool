@@ -6,3 +6,9 @@ dist
 build
 *.spec
 __pycache__
+.venv
+.superpowers
+.github
+evals/results
+*.pdf
+.firecrawl
