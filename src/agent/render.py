@@ -3,11 +3,18 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 
 import numpy as np
 import pyvista as pv
 
 from src.agent.schema import GeometrySummary
+
+# pyvista/VTK's off-screen renderer is not safe to drive from multiple threads
+# at once within a process (create_session now runs the render off the event
+# loop via a threadpool, so concurrent uploads can otherwise overlap here).
+# Serialise the whole build-plotter/screenshot/close sequence per process.
+_RENDER_LOCK = threading.Lock()
 
 SUPPORT_RGB = (63, 111, 158)
 LOAD_RGB = (217, 138, 43)
@@ -86,26 +93,28 @@ def _build_plotter(named_solids, summary: GeometrySummary, support_targets: list
 
 def render_image(named_solids, summary: GeometrySummary, support_targets: list[str],
                  load_targets: list[str]) -> np.ndarray:
-    plotter = _build_plotter(named_solids, summary, support_targets, load_targets)
-    try:
-        img = plotter.screenshot(return_img=True)
-        return np.asarray(img)[:, :, :3].astype(np.uint8)
-    finally:
-        plotter.close()
+    with _RENDER_LOCK:
+        plotter = _build_plotter(named_solids, summary, support_targets, load_targets)
+        try:
+            img = plotter.screenshot(return_img=True)
+            return np.asarray(img)[:, :, :3].astype(np.uint8)
+        finally:
+            plotter.close()
 
 
 def render_png(named_solids, summary: GeometrySummary, support_targets: list[str],
                load_targets: list[str]) -> bytes:
-    plotter = _build_plotter(named_solids, summary, support_targets, load_targets)
-    fd, path = tempfile.mkstemp(suffix=".png")
-    os.close(fd)
-    try:
-        plotter.screenshot(path)
-        with open(path, "rb") as fh:
-            return fh.read()
-    finally:
-        plotter.close()
+    with _RENDER_LOCK:
+        plotter = _build_plotter(named_solids, summary, support_targets, load_targets)
+        fd, path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
         try:
-            os.remove(path)
-        except OSError:
-            pass
+            plotter.screenshot(path)
+            with open(path, "rb") as fh:
+                return fh.read()
+        finally:
+            plotter.close()
+            try:
+                os.remove(path)
+            except OSError:
+                pass

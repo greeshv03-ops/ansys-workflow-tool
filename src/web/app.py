@@ -15,6 +15,7 @@ from typing import Optional
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from src.agent.adapter import to_config
 from src.agent.pipeline import run_pipeline
@@ -140,8 +141,7 @@ async def create_session(file: UploadFile = File(...)):
         os.remove(path)
         raise
     try:
-        features, solids = GeometryAnalyzer.analyze_with_solids(path)
-        summary = build_summary(features, [ns.body for ns in solids])
+        features, solids, summary = await run_in_threadpool(_analyze_and_summarize, path)
     except ValueError as e:
         os.remove(path)
         raise HTTPException(400, str(e))
@@ -153,7 +153,15 @@ async def create_session(file: UploadFile = File(...)):
     SESSIONS[sid] = Session(id=sid, created=now, last_used=now, geometry_path=path,
                             features=features, solids=solids, summary=summary)
     SESSION_STARTS.append(now)
-    return {"session_id": sid, "summary": summary.model_dump(), "render_png_base64": _b64_render(SESSIONS[sid])}
+    render_b64 = await run_in_threadpool(_b64_render, SESSIONS[sid])
+    return {"session_id": sid, "summary": summary.model_dump(), "render_png_base64": render_b64}
+
+
+def _analyze_and_summarize(path: str):
+    """CPU-bound geometry analysis and summary build; run off the event loop."""
+    features, solids = GeometryAnalyzer.analyze_with_solids(path)
+    summary = build_summary(features, [ns.body for ns in solids])
+    return features, solids, summary
 
 
 def _run(sess: Session, brief: str, instruction: Optional[str]) -> dict:
