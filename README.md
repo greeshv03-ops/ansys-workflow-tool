@@ -26,16 +26,16 @@ Latest run: 2026-09-05, playbook `abbce1e2fb30`, 3 runs per part, claude-opus-5 
 | bracket_flat_2hole | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | bracket_l_4hole | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | enclosure_lidless | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
-| frame_tube | 1.00 ±0.00 | 1.00 ±0.00 | 0.67 ±0.50 | 1.00 ±0.00 | 1.00 ±0.00 | 0.93 ±0.10 |
+| frame_tube | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | lid_flat | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | mount_pedestal | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | pin_clevis | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | shaft_stepped | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | tray_open | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | weldment_tee | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
-| **all** | **1.00** | **1.00** | **0.97** | **1.00** | **1.00** | **0.99** |
+| **all** | **1.00** | **1.00** | **1.00** | **1.00** | **1.00** | **1.00** |
 
-Previous run with the earlier playbook (`caf827b46422`) scored 0.98 overall with three validator retries; adding the mesh-refinement rule removed those. Every run's table is in `evals/results/`.
+How it got here: the first run scored 0.93, with every miss traced to a reference that disagreed with a physically sound proposal (gravity conventions, an overload encoded as g, a hitch load through the end-plate holes) or to one validator rule the playbook did not state (refinements must be finer than the global size). Fixing those references and adding two playbook sentences took it to 1.00. Every run's table is in `evals/results/`.
 
 Scores are 0 to 1. `load_cases`, `supports`, `loads` are the fraction of reference items matched (by id or an accepted alternative). `material` is family match. `first_pass_valid` is whether the validator passed without a retry. Three runs per part; ± is half the spread.
 
