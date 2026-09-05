@@ -96,7 +96,8 @@ def _summary_hash(summary: GeometrySummary) -> str:
 
 def _default_client():
     import anthropic
-    return anthropic.Anthropic()
+    # Long structured-output calls ride out transient connection drops: 4 retries instead of the SDK's 2.
+    return anthropic.Anthropic(max_retries=4)
 
 
 def propose(summary: GeometrySummary, brief: str, playbook: Optional[str] = None,

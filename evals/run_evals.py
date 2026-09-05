@@ -6,6 +6,8 @@ import argparse
 import json
 import math
 import statistics
+import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -107,30 +109,57 @@ def _load_part(name: str):
     return summary, brief, reference
 
 
-def run(part_names: list[str] | None = None, repeats: int = 3, propose_fn=propose) -> str:
+RETRY_WAIT_S = 5.0
+
+
+def _run_once(summary, brief, db, session_id, propose_fn, retry_wait_s):
+    """One eval run; a failed model call is retried once after a short wait.
+
+    Returns the PipelineResult, or None when both attempts failed (the error is
+    printed so the run can be inspected, and the eval continues with the next run).
+    """
+    for attempt in (1, 2):
+        try:
+            return run_pipeline(summary, brief, db, session_id=session_id, propose_fn=propose_fn)
+        except Exception as exc:  # noqa: BLE001 - any model/network failure must not abort the eval
+            print(f"[{session_id}] attempt {attempt} failed: {exc}", file=sys.stderr)
+            if attempt == 1:
+                time.sleep(retry_wait_s)
+    return None
+
+
+def run(part_names: list[str] | None = None, repeats: int = 3, propose_fn=propose,
+        retry_wait_s: float = RETRY_WAIT_S) -> str:
     db = MaterialDatabase()
     names = part_names or sorted(p.name for p in PARTS_DIR.iterdir() if (p / "part.step").exists())
     rows = []
     for name in names:
         summary, brief, reference = _load_part(name)
-        runs = []
+        runs, failed = [], 0
         for i in range(repeats):
-            result = run_pipeline(summary, brief, db, session_id=f"eval-{name}-{i}", propose_fn=propose_fn)
+            result = _run_once(summary, brief, db, f"eval-{name}-{i}", propose_fn, retry_wait_s)
+            if result is None:
+                failed += 1
+                continue
             runs.append(score_part(result.proposal, reference, db, result.attempts == 1 and result.valid))
-        rows.append((name, runs))
+        rows.append((name, runs, failed))
 
     lines = [f"# Eval results {date.today().isoformat()} · playbook {playbook_hash()} · {repeats} runs per part", "",
              "| part | " + " | ".join(COLUMNS) + " |", "|---|" + "---|" * len(COLUMNS)]
     totals = {c: [] for c in COLUMNS}
-    for name, runs in rows:
+    for name, runs, failed in rows:
         cells = []
         for c in COLUMNS:
             vals = [r[c] for r in runs]
+            if not vals:
+                cells.append("—")
+                continue
             m = statistics.mean(vals)
             spread = (max(vals) - min(vals)) if len(vals) > 1 else 0.0
             totals[c].append(m)
             cells.append(f"{m:.2f} ±{spread / 2:.2f}")
-        lines.append(f"| {name} | " + " | ".join(cells) + " |")
+        label = f"{name} (failed {failed}/{repeats})" if failed else name
+        lines.append(f"| {label} | " + " | ".join(cells) + " |")
     lines.append("| **all** | " + " | ".join(f"**{statistics.mean(totals[c]):.2f}**" if totals[c] else "—" for c in COLUMNS) + " |")
     table = "\n".join(lines) + "\n"
 
