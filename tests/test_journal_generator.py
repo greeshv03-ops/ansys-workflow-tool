@@ -194,6 +194,43 @@ def test_journal_one_system_per_load_case(config, tmp_path):
     assert len(open_mechanical_lines) == 1
 
 
+def test_journal_escapes_special_characters_in_load_case_name(config, tmp_path):
+    import json
+    from dataclasses import replace
+    from src.models import LoadCaseBlock, BoundaryCondition as BC
+    special_name = 'weird "quote"\nand a backslash \\ end'
+    cases = [LoadCaseBlock(name=special_name, boundary_conditions=[
+        BC(bc_type="Fixed Support", target="Cyl hole #1"),
+    ])]
+    special = replace(config, load_cases=cases)
+    wbjn, _ = JournalGenerator.write(special, str(tmp_path))
+    text = Path(wbjn).read_text()
+    compile(text, "simulation_setup.wbjn", "exec")
+    assert f"system1.DisplayText = {json.dumps(special_name)}" in text
+
+
+def test_journal_multi_load_case_names_with_special_characters_compile(config, tmp_path):
+    from dataclasses import replace
+    from src.models import LoadCaseBlock, BoundaryCondition as BC
+    cases = [
+        LoadCaseBlock(name='first "case"', boundary_conditions=[
+            BC(bc_type="Fixed Support", target="Cyl hole #1"),
+        ]),
+        LoadCaseBlock(name='second\ncase\\with\\backslashes', rationale='line one\nline two', boundary_conditions=[
+            BC(bc_type="Force", target='face\nwith\nnewlines', magnitude=500.0, direction="Y"),
+        ]),
+    ]
+    multi = replace(config, load_cases=cases)
+    wbjn, _ = JournalGenerator.write(multi, str(tmp_path))
+    text = Path(wbjn).read_text()
+    compile(text, "simulation_setup.wbjn", "exec")
+    # The rationale and target contained embedded newlines; pycomment must
+    # collapse them to one line each so no bare continuation line escapes
+    # the leading "#" and breaks the script.
+    assert "line one line two" in text
+    assert "face with newlines" in text
+
+
 def test_summary_omits_agent_sections_when_empty(config, tmp_path):
     html = Path(SummaryGenerator.write(config, str(tmp_path))).read_text()
     assert "Load Cases" not in html and "Assumptions" not in html and "Open Questions" not in html

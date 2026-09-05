@@ -10,7 +10,7 @@ geometry1 = system1.GetContainer(ComponentName="Geometry")
 geometry1.SetFile(FilePath=r"{{ config.geometry_path }}")
 {{ mat.engineering_data("system1", materials) }}
 {% if load_cases %}
-system1.DisplayText = "{{ load_cases[0].name }}"
+system1.DisplayText = {{ load_cases[0].name|pyquote }}
 {% for lc in load_cases[1:] %}
 system{{ loop.index + 1 }} = template1.CreateSystem(
     ComponentsToShare=[system1.GetComponent(Name="Engineering Data"),
@@ -18,14 +18,14 @@ system{{ loop.index + 1 }} = template1.CreateSystem(
                        system1.GetComponent(Name="Model")],
     Position="Right",
     RelativeTo=system{{ loop.index }})
-system{{ loop.index + 1 }}.DisplayText = "{{ lc.name }}"
+system{{ loop.index + 1 }}.DisplayText = {{ lc.name|pyquote }}
 {% endfor %}
 
 # --- Load cases: apply these in Mechanical for each system ---
 {% for lc in load_cases %}
-# system{{ loop.index }} "{{ lc.name }}"{% if lc.rationale %} — {{ lc.rationale }}{% endif %}{{ "\n" -}}
+# system{{ loop.index }} "{{ lc.name|pycomment }}"{% if lc.rationale %} — {{ lc.rationale|pycomment }}{% endif %}{{ "\n" -}}
 {% for bc in lc.boundary_conditions %}
-#   {{ bc.bc_type }} on {{ bc.target }}{% if bc.magnitude is not none %}: {{ bc.magnitude|num }} {{ bc.unit }}{% endif %}{% if bc.direction %} along {{ bc.direction }}{% endif %}{{ "\n" -}}
+#   {{ bc.bc_type|pycomment }} on {{ bc.target|pycomment }}{% if bc.magnitude is not none %}: {{ bc.magnitude|num }} {{ bc.unit|pycomment }}{% endif %}{% if bc.direction %} along {{ bc.direction|pycomment }}{% endif %}{{ "\n" -}}
 {% endfor %}
 {% endfor %}
 {% endif %}

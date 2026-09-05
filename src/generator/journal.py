@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
@@ -21,7 +22,30 @@ def _num(value) -> str:
     return f"{value:g}"
 
 
+def _pyquote(value) -> str:
+    """Render value as a safe, double-quoted Python string literal.
+
+    Model-authored free text (load case names, etc.) is interpolated into a
+    .wbjn journal that ANSYS executes as a Python script. json.dumps produces
+    a valid Python string literal (escaping quotes, backslashes, and control
+    characters including newlines) so the emitted journal always compiles.
+    """
+    return json.dumps(str(value))
+
+
+def _pycomment(value) -> str:
+    """Collapse value to a single line safe to place after a ``#`` comment.
+
+    CR/LF characters are replaced with spaces so model-authored free text
+    cannot span multiple physical lines and escape the leading ``#``.
+    """
+    text = str(value)
+    return text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+
+
 _ENV.filters["num"] = _num
+_ENV.filters["pyquote"] = _pyquote
+_ENV.filters["pycomment"] = _pycomment
 
 
 def _fmt(value, unit: str = "") -> str:
