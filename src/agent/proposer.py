@@ -108,15 +108,27 @@ def propose(summary: GeometrySummary, brief: str, playbook: Optional[str] = None
     user = build_user_message(summary, brief, prior=prior, feedback=feedback, instruction=instruction)
 
     t0 = time.perf_counter()
-    resp = client.messages.parse(
-        model=model,
-        max_tokens=MAX_TOKENS,
-        system=build_system_prompt(playbook),
-        messages=[{"role": "user", "content": user}],
-        output_format=SetupProposal,
-        thinking={"type": "adaptive"},
-    )
+    try:
+        resp = client.messages.parse(
+            model=model,
+            max_tokens=MAX_TOKENS,
+            system=build_system_prompt(playbook),
+            messages=[{"role": "user", "content": user}],
+            output_format=SetupProposal,
+            thinking={"type": "adaptive"},
+        )
+    except Exception as exc:
+        _log_call_error(summary, brief, model, session_id, log_path, error=str(exc))
+        raise RuntimeError(f"Model call failed: {exc}") from exc
     latency = time.perf_counter() - t0
+
+    stop_reason = getattr(resp, "stop_reason", None)
+    if resp.parsed_output is None or stop_reason in ("max_tokens", "refusal"):
+        _log_call_error(summary, brief, model, session_id, log_path, stop_reason=stop_reason)
+        raise RuntimeError(
+            f"The model did not return a proposal (stop_reason={stop_reason}). Try rephrasing the brief."
+        )
+
     proposal: SetupProposal = resp.parsed_output
     usage = getattr(resp, "usage", None)
     result = ProposalResult(
@@ -146,4 +158,24 @@ def _log(result: ProposalResult, summary: GeometrySummary, brief: str, model: st
         "summary_hash": _summary_hash(summary),
         "proposal": result.proposal.model_dump(),
     }
+    append_jsonl(log_path, row)
+
+
+def _log_call_error(summary: GeometrySummary, brief: str, model: str, session_id: str,
+                    log_path: Path, error: Optional[str] = None,
+                    stop_reason: Optional[str] = None) -> None:
+    """Log a failed or refused call: same shape as a successful call row, minus a proposal."""
+    row = {
+        "kind": "call",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "session_id": session_id,
+        "model": model,
+        "playbook_hash": playbook_hash(),
+        "brief": brief,
+        "summary_hash": _summary_hash(summary),
+    }
+    if error is not None:
+        row["error"] = error
+    if stop_reason is not None:
+        row["stop_reason"] = stop_reason
     append_jsonl(log_path, row)

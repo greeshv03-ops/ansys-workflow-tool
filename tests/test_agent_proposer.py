@@ -97,6 +97,57 @@ def test_propose_logs_jsonl(summary, proposal, tmp_path):
     assert row["session_id"] == "abc" and row["proposal"]["materials"][0]["material_id"] == 1
 
 
+class FakeMessagesRaises:
+    def __init__(self, exc):
+        self.exc = exc
+
+    def parse(self, **kwargs):
+        raise self.exc
+
+
+def test_propose_wraps_api_errors_and_logs_one_error_row(summary, tmp_path):
+    client = SimpleNamespace(messages=FakeMessagesRaises(RuntimeError("connection reset")))
+    log = tmp_path / "log.jsonl"
+    with pytest.raises(RuntimeError, match="connection reset"):
+        propose(summary, "brief", client=client, session_id="abc", log_path=log)
+    rows = [json.loads(line) for line in log.read_text().splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "call"
+    assert rows[0]["session_id"] == "abc"
+    assert rows[0]["error"] == "connection reset"
+    assert "proposal" not in rows[0]
+
+
+class FakeMessagesRefusal:
+    def __init__(self, stop_reason, parsed_output=None):
+        self.stop_reason = stop_reason
+        self.parsed_output = parsed_output
+
+    def parse(self, **kwargs):
+        return SimpleNamespace(parsed_output=self.parsed_output, stop_reason=self.stop_reason,
+                               usage=SimpleNamespace(input_tokens=10, output_tokens=0, cache_read_input_tokens=0))
+
+
+def test_propose_raises_readable_error_on_refusal_and_logs_stop_reason(summary, tmp_path):
+    client = SimpleNamespace(messages=FakeMessagesRefusal("refusal"))
+    log = tmp_path / "log.jsonl"
+    with pytest.raises(RuntimeError, match="did not return a proposal"):
+        propose(summary, "brief", client=client, session_id="abc", log_path=log)
+    rows = [json.loads(line) for line in log.read_text().splitlines()]
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "call"
+    assert rows[0]["session_id"] == "abc"
+    assert rows[0]["stop_reason"] == "refusal"
+    assert "proposal" not in rows[0]
+
+
+def test_propose_raises_readable_error_on_max_tokens_cutoff(summary, tmp_path):
+    client = SimpleNamespace(messages=FakeMessagesRefusal("max_tokens"))
+    log = tmp_path / "log.jsonl"
+    with pytest.raises(RuntimeError, match="did not return a proposal"):
+        propose(summary, "brief", client=client, session_id="abc", log_path=log)
+
+
 @pytest.mark.skipif(not os.environ.get("ANTHROPIC_API_KEY"), reason="live smoke test needs ANTHROPIC_API_KEY")
 def test_live_smoke(summary, tmp_path):
     result = propose(summary, "A mild steel bracket bolted through its top face, carrying a 2 kg sensor.",
