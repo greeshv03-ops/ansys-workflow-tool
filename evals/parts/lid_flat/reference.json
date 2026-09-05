@@ -1,0 +1,8 @@
+{
+  "material_family": "Aluminum",
+  "supports": [{"type": "fixed", "targets": ["hole_group:6"], "alternatives": ["hole_group:4"]}],
+  "loads": [{"type": "pressure", "targets": ["label:+Z face"], "alternatives": ["label:-Z face"]}],
+  "load_cases": [
+    {"name": "static", "acceleration_g": [0, 0, -1]}
+  ]
+}
