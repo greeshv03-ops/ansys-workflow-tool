@@ -184,6 +184,14 @@ def test_journal_one_system_per_load_case(config, tmp_path):
     assert 'GetComponent(Name="Model")' in text
     assert "Force on +X face: 500 N along (0, 0, -1)" in text
     assert text.count('CreateMaterial(Name="Structural Steel")') == 1
+    lines = text.splitlines()
+    assert '# system1 "static 1g"' in lines
+    assert '# system2 "shock 5g"' in lines
+    assert "\n# system2" in text
+    assert "#   Fixed Support on Cyl hole #1" in lines
+    assert "#   Force on +X face: 500 N along (0, 0, -1)" in lines
+    open_mechanical_lines = [ln for ln in lines if ln.startswith("# Open Mechanical")]
+    assert len(open_mechanical_lines) == 1
 
 
 def test_summary_omits_agent_sections_when_empty(config, tmp_path):

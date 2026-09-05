@@ -23,9 +23,9 @@ system{{ loop.index + 1 }}.DisplayText = "{{ lc.name }}"
 
 # --- Load cases: apply these in Mechanical for each system ---
 {% for lc in load_cases %}
-# system{{ loop.index }} "{{ lc.name }}"{% if lc.rationale %} — {{ lc.rationale }}{% endif %}
+# system{{ loop.index }} "{{ lc.name }}"{% if lc.rationale %} — {{ lc.rationale }}{% endif %}{{ "\n" -}}
 {% for bc in lc.boundary_conditions %}
-#   {{ bc.bc_type }} on {{ bc.target }}{% if bc.magnitude is not none %}: {{ bc.magnitude|num }} {{ bc.unit }}{% endif %}{% if bc.direction %} along {{ bc.direction }}{% endif %}
+#   {{ bc.bc_type }} on {{ bc.target }}{% if bc.magnitude is not none %}: {{ bc.magnitude|num }} {{ bc.unit }}{% endif %}{% if bc.direction %} along {{ bc.direction }}{% endif %}{{ "\n" -}}
 {% endfor %}
 {% endfor %}
 {% endif %}
