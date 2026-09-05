@@ -23,6 +23,9 @@ class FaceLabel:
     centroid: tuple[float, float, float]
     normal: Optional[tuple[float, float, float]] = None
     radius: Optional[float] = None
+    axis: Optional[tuple[float, float, float]] = None        # cylinder axis direction
+    axis_point: Optional[tuple[float, float, float]] = None  # a point on that axis
+    index: int = -1                                          # position in features.faces
 
 
 @dataclass

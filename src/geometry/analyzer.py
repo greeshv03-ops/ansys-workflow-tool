@@ -39,7 +39,7 @@ class NamedSolid:
     body: Body
     shape: "cq.Shape" = field(repr=False)
 
-_MAX_LABELED_FACES = 100
+_MAX_LABELED_FACES = 400
 _MAX_DETAILED_BODIES = 3
 
 
@@ -302,9 +302,16 @@ class GeometryAnalyzer:
                     ))
                 elif gt == "CYLINDER" and _OCP_AVAILABLE:
                     radius = None
+                    axis = None
+                    axis_point = None
                     try:
                         adaptor = GeomAdaptor_Surface(BRep_Tool.Surface_s(face.wrapped))
-                        radius = round(adaptor.Cylinder().Radius(), 3)
+                        cyl = adaptor.Cylinder()
+                        radius = round(cyl.Radius(), 3)
+                        d = cyl.Axis().Direction()
+                        loc = cyl.Axis().Location()
+                        axis = (round(d.X(), 4), round(d.Y(), 4), round(d.Z(), 4))
+                        axis_point = (round(loc.X(), 3), round(loc.Y(), 3), round(loc.Z(), 3))
                     except Exception:
                         pass
                     cyl_n += 1
@@ -314,6 +321,7 @@ class GeometryAnalyzer:
                     labels.append(FaceLabel(
                         name=name, face_type="cylindrical", area=area,
                         centroid=centroid, radius=radius,
+                        axis=axis, axis_point=axis_point,
                     ))
                 elif gt == "CONE":
                     cone_n += 1
@@ -337,7 +345,10 @@ class GeometryAnalyzer:
                 continue
 
         labels.sort(key=lambda lbl: -lbl.area)
-        return labels[:_MAX_LABELED_FACES]
+        labels = labels[:_MAX_LABELED_FACES]
+        for i, lbl in enumerate(labels):
+            lbl.index = i
+        return labels
 
 
 def _make_named_solid(body_id: int, name: str, solid, with_volume: bool = True) -> NamedSolid:
