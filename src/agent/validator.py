@@ -85,18 +85,29 @@ def _rule5_magnitudes(p, s, db) -> list[str]:
         a = lc.acceleration_g
         if max(abs(a.x), abs(a.y), abs(a.z)) > MAX_ACCEL_G:
             out.append(f"rule5: load case '{lc.name}' acceleration exceeds 30 g")
-    yield_by_body = {}
+    strength_by_body = {}
+    strength_type = {}  # "yield" or "UTS"
     for m in p.materials:
         row = db.get_by_id(m.material_id)
-        if row and row.get("yield_MPa"):
-            yield_by_body[m.body_id] = float(row["yield_MPa"])
+        if row:
+            yield_val = row.get("yield_MPa")
+            uts_val = row.get("UTS_MPa")
+            if yield_val and yield_val > 0:
+                strength_by_body[m.body_id] = float(yield_val)
+                strength_type[m.body_id] = "yield"
+            elif uts_val and uts_val > 0:
+                strength_by_body[m.body_id] = float(uts_val)
+                strength_type[m.body_id] = "UTS"
     for ld in p.loads:
         if ld.type == "pressure":
             face_ids = s.target_face_ids(ld.target)
             body_id = s.face_by_id(face_ids[0]).body_id if face_ids else None
-            y = yield_by_body.get(body_id)
-            if y is not None and ld.magnitude >= y:
-                out.append(f"rule5: load {ld.id} pressure {ld.magnitude:g} MPa is not below the material yield {y:g} MPa")
+            limit = strength_by_body.get(body_id)
+            if limit is not None and ld.magnitude >= limit:
+                if strength_type[body_id] == "yield":
+                    out.append(f"rule5: load {ld.id} pressure {ld.magnitude:g} MPa is not below the material yield {limit:g} MPa")
+                else:
+                    out.append(f"rule5: load {ld.id} pressure {ld.magnitude:g} MPa is not below the material ultimate strength {limit:g} MPa")
         elif abs(ld.magnitude) >= MAX_FORCE_N:
             out.append(f"rule5: load {ld.id} magnitude {ld.magnitude:g} N is not below 1e6 N")
     return out

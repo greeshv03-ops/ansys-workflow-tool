@@ -144,3 +144,34 @@ def test_rule7_fixed_area_over_half(summary, db):
 def test_rule8_direction_not_unit(summary, db):
     d = good_proposal(); d["loads"][0]["direction"] = vec(0, 0, -2)
     assert any(m.startswith("rule8") and "l1" in m for m in run(d, summary, db))
+
+
+def test_rule5_zero_yield_uses_uts(summary, db):
+    # Cast Iron Gray has yield_MPa = 0 and UTS_MPa = 179
+    # Material id 4 from seed data (0-indexed 3 in SEED_DATA list)
+    cast_iron_row = db.search("Cast Iron Gray")
+    assert len(cast_iron_row) > 0, "Cast Iron Gray not found in database"
+    cast_iron_id = cast_iron_row[0]["id"]
+
+    d = good_proposal()
+    d["materials"][0]["material_id"] = cast_iron_id
+    d["loads"][0]["type"] = "pressure"
+    d["loads"][0]["magnitude"] = 179.0  # Equal to UTS
+    msgs = run(d, summary, db)
+    assert any(m.startswith("rule5") and "ultimate strength" in m for m in msgs), \
+        f"Expected ultimate strength message for pressure at UTS, got: {msgs}"
+
+
+def test_rule5_zero_yield_uts_below_threshold(summary, db):
+    # Pressure below UTS should pass
+    cast_iron_row = db.search("Cast Iron Gray")
+    assert len(cast_iron_row) > 0
+    cast_iron_id = cast_iron_row[0]["id"]
+
+    d = good_proposal()
+    d["materials"][0]["material_id"] = cast_iron_id
+    d["loads"][0]["type"] = "pressure"
+    d["loads"][0]["magnitude"] = 170.0  # Below UTS of 179
+    msgs = run(d, summary, db)
+    assert not any(m.startswith("rule5") and "pressure" in m for m in msgs), \
+        f"Expected no pressure rule5 message for magnitude below UTS, got: {msgs}"
