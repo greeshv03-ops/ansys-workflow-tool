@@ -143,6 +143,23 @@ def test_download_zip_has_journal_and_report(client, step_bytes):
     assert b"Static Structural" in z.read("simulation_setup.wbjn")
 
 
+def test_download_zip_ships_step_under_original_name(client, step_bytes):
+    sid = upload(client, step_bytes, name="my part.step").json()["session_id"]
+    sess = webapp.SESSIONS[sid]
+    temp_path = sess.geometry_path
+    client.post(f"/session/{sid}/propose", json={"brief": "A steel bracket."})
+    d = client.get(f"/session/{sid}/download")
+    assert d.status_code == 200
+    z = zipfile.ZipFile(io.BytesIO(d.content))
+    names = set(z.namelist())
+    assert "my part.step" in names
+    assert z.read("my part.step") == step_bytes
+    assert "README.txt" in names
+    journal_text = z.read("simulation_setup.wbjn").decode("utf-8")
+    assert "my part.step" in journal_text
+    assert temp_path not in journal_text
+
+
 def test_calls_per_session_cap(client, step_bytes, monkeypatch):
     monkeypatch.setattr(webapp, "CALLS_PER_SESSION", 2)
     sid = upload(client, step_bytes).json()["session_id"]
