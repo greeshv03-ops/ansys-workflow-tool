@@ -127,6 +127,12 @@ class GeometrySummary(_Strict):
                 return f
         return None
 
+    def body_by_id(self, body_id: int) -> Optional[SummaryBody]:
+        for b in self.bodies:
+            if b.id == body_id:
+                return b
+        return None
+
     def hole_group_by_id(self, group_id: str) -> Optional[HoleGroup]:
         for g in self.hole_groups:
             if g.id == group_id:
