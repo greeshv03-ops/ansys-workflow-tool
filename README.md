@@ -19,23 +19,23 @@ STEP → GeometryAnalyzer → Summary Builder (compact JSON) → Proposal Agent 
 
 ### Eval results
 
-Latest run: 2026-09-05, playbook `caf827b46422`, 3 runs per part, claude-opus-5 (33 calls, 3 validator retries, no errors).
+Latest run: 2026-09-05, playbook `abbce1e2fb30`, 3 runs per part, claude-opus-5 (30 calls, no validator retries, no errors).
 
 | part | load_cases | supports | loads | material | first_pass_valid | overall |
 |---|---|---|---|---|---|---|
-| bracket_flat_2hole | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 0.33 ±0.50 | 0.87 ±0.10 |
+| bracket_flat_2hole | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | bracket_l_4hole | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | enclosure_lidless | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
-| frame_tube | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
+| frame_tube | 1.00 ±0.00 | 1.00 ±0.00 | 0.67 ±0.50 | 1.00 ±0.00 | 1.00 ±0.00 | 0.93 ±0.10 |
 | lid_flat | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
-| mount_pedestal | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 0.67 ±0.50 | 0.93 ±0.10 |
+| mount_pedestal | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | pin_clevis | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | shaft_stepped | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | tray_open | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
 | weldment_tee | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
-| **all** | **1.00** | **1.00** | **1.00** | **1.00** | **0.90** | **0.98** |
+| **all** | **1.00** | **1.00** | **0.97** | **1.00** | **1.00** | **0.99** |
 
-Follow-up check after adding the mesh-refinement rule to the playbook (`abbce1e2fb30`, 1 run per part, 10 calls): 1.00 on every column, including `first_pass_valid`, so no proposal needed the validator retry. See `evals/results/2026-09-05_abbce1e2fb30.md`.
+Previous run with the earlier playbook (`caf827b46422`) scored 0.98 overall with three validator retries; adding the mesh-refinement rule removed those. Every run's table is in `evals/results/`.
 
 Scores are 0 to 1. `load_cases`, `supports`, `loads` are the fraction of reference items matched (by id or an accepted alternative). `material` is family match. `first_pass_valid` is whether the validator passed without a retry. Three runs per part; ± is half the spread.
 
