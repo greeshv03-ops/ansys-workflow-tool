@@ -18,6 +18,7 @@
         "label:+X face"
       ],
       "alternatives": [
+        "id:hg2",
         "label:Planar face"
       ]
     }

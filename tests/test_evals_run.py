@@ -64,3 +64,13 @@ def test_run_records_a_run_that_fails_twice_and_still_writes_results(isolated_ru
 def test_default_client_retries_more_than_the_sdk_default(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     assert _default_client().max_retries >= 4
+
+
+def test_frame_tube_reference_accepts_the_hitch_end_hole_group():
+    # The brief says the load comes "from a hitch plate"; bolting it through the
+    # free-end holes is a valid reading, so that hole group must count as a hit.
+    summary, _brief, ref = run_evals._load_part("frame_tube")
+    support_targets = set(ref["supports"][0]["targets"])
+    load_accepted = set(ref["loads"][0]["targets"]) | set(ref["loads"][0]["alternatives"])
+    assert "hg2" in load_accepted
+    assert not (support_targets & load_accepted), "the load alternative must not be the fixed-end hole group"
