@@ -160,6 +160,66 @@ def test_download_zip_ships_step_under_original_name(client, step_bytes):
     assert temp_path not in journal_text
 
 
+def upload_with_raw_filename(client, step_bytes, raw_filename):
+    """POST /session with a filename containing literal quote/backslash bytes.
+
+    httpx's own multipart encoder percent-encodes `"` and `\\` inside the
+    Content-Disposition filename parameter, so passing a hostile name via
+    `files={"file": (name, ...)}` never reaches the server as literal
+    characters. Build the multipart body by hand (RFC 7578-style backslash
+    escaping of `"` and `\\`, which python-multipart un-escapes) so the
+    endpoint actually sees the raw, unescaped filename an attacker would
+    send with a hand-crafted client.
+    """
+    boundary = "xxxxxxxxxxboundaryxxxxxxxxxx"
+    escaped = raw_filename.replace("\\", "\\\\").replace('"', '\\"')
+    body = (
+        f'--{boundary}\r\n'
+        f'Content-Disposition: form-data; name="file"; filename="{escaped}"\r\n'
+        f'Content-Type: application/octet-stream\r\n\r\n'
+    ).encode("utf-8") + step_bytes + f'\r\n--{boundary}--\r\n'.encode("utf-8")
+    return client.post("/session", content=body,
+                       headers={"content-type": f"multipart/form-data; boundary={boundary}"})
+
+
+def test_upload_and_download_sanitise_hostile_filename(client, step_bytes):
+    # A filename crafted to break out of the `r"..."` raw-string literal that
+    # used to hold the geometry path in the .wbjn journal. It still passes
+    # the .step extension check, so the sanitiser (not the extension check)
+    # must be what neutralises it.
+    hostile = 'x"); import os; os.system("calc"); (".step'
+    r = upload_with_raw_filename(client, step_bytes, hostile)
+    assert r.status_code == 200
+    sid = r.json()["session_id"]
+    sanitised = webapp.SESSIONS[sid].filename
+    assert sanitised.endswith(".step")
+    assert '"' not in sanitised and "\\" not in sanitised
+    assert "_" in sanitised  # quotes replaced with underscores
+
+    client.post(f"/session/{sid}/propose", json={"brief": "A steel bracket."})
+    d = client.get(f"/session/{sid}/download")
+    assert d.status_code == 200
+    z = zipfile.ZipFile(io.BytesIO(d.content))
+    names = set(z.namelist())
+    assert sanitised in names
+    assert z.read(sanitised) == step_bytes
+
+    journal_text = z.read("simulation_setup.wbjn").decode("utf-8")
+    compile(journal_text, "simulation_setup.wbjn", "exec")
+    # The literal text "os.system" is still present as inert content inside
+    # the FilePath string constant (letters aren't part of the sanitiser's
+    # scrub set) -- what must be true is that it never becomes a real call
+    # node in the parsed AST, i.e. the injection never escapes the string.
+    import ast
+    tree = ast.parse(journal_text)
+    def is_os_system_call(node):
+        f = node.func
+        return (isinstance(node, ast.Call) and isinstance(f, ast.Attribute)
+                and f.attr == "system" and isinstance(f.value, ast.Name) and f.value.id == "os")
+    assert not any(is_os_system_call(n) for n in ast.walk(tree) if isinstance(n, ast.Call))
+    assert sanitised in journal_text
+
+
 def test_calls_per_session_cap(client, step_bytes, monkeypatch):
     monkeypatch.setattr(webapp, "CALLS_PER_SESSION", 2)
     sid = upload(client, step_bytes).json()["session_id"]

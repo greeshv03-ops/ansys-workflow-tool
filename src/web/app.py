@@ -55,15 +55,31 @@ class Session:
     brief: str = ""
 
 
-def _safe_upload_filename(raw: Optional[str]) -> str:
-    """Bare basename of the uploaded file, safe to use inside the download zip.
+_UPLOAD_FILENAME_BAD_CHARS = '"\'\\\n\r\x00'
 
-    Strips any directory components the client may have sent (path or
-    filename could carry `/`, `\\`, or `..`) so it is never used to escape
-    the zip's own directory; falls back to a generic name when empty.
+
+def _safe_upload_filename(raw: Optional[str]) -> str:
+    """Sanitise the uploaded filename for use inside the journal and the zip.
+
+    The client-supplied filename ends up both as a zip member name and,
+    unescaped as a Python string literal, as the value passed to the
+    journal's ``SetFile(FilePath=...)`` call (via ``|pyquote``, which itself
+    handles quoting for the rendered journal). This function's job is
+    narrower: strip any directory components the client may have sent (a
+    path or filename could carry `/`, `\\`, or `..`) by taking the last
+    segment after normalising both separators, then scrub characters that
+    have no business in a filename and could otherwise cause confusion
+    downstream (quotes, backslashes, CR/LF, NUL) by replacing them with `_`.
+    Leading/trailing whitespace and dots are stripped. Falls back to a
+    generic ``part.step`` name when the result is empty or does not end in
+    `.step`/`.stp` (case-insensitive).
     """
-    name = Path((raw or "").strip()).name
-    return name or "part.step"
+    name = Path((raw or "").strip().replace("\\", "/")).name
+    name = "".join("_" if ch in _UPLOAD_FILENAME_BAD_CHARS else ch for ch in name)
+    name = name.strip(" .")
+    if not name or not name.lower().endswith((".step", ".stp")):
+        return "part.step"
+    return name
 
 
 SESSIONS: dict[str, Session] = {}

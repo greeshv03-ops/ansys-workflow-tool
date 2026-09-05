@@ -231,6 +231,42 @@ def test_journal_multi_load_case_names_with_special_characters_compile(config, t
     assert "face with newlines" in text
 
 
+def _setfile_call(text: str):
+    import ast
+    setfile_line = next(ln for ln in text.splitlines() if "SetFile(FilePath=" in ln)
+    tree = ast.parse(setfile_line.strip())
+    assert len(tree.body) == 1
+    call = tree.body[0].value
+    assert isinstance(call, ast.Call)
+    return call
+
+
+def test_journal_geometry_path_injection_is_quoted_safely(config, tmp_path):
+    import ast
+    from dataclasses import replace
+    hostile = 'x"); import os; os.system("calc"); (".step'
+    cfg = replace(config, geometry_path=hostile)
+    wbjn, _ = JournalGenerator.write(cfg, str(tmp_path))
+    text = Path(wbjn).read_text()
+    compile(text, "simulation_setup.wbjn", "exec")
+    call = _setfile_call(text)
+    filepath_kw = next(kw for kw in call.keywords if kw.arg == "FilePath")
+    assert isinstance(filepath_kw.value, ast.Constant)
+    assert filepath_kw.value.value == hostile
+
+
+def test_journal_geometry_path_ordinary_paths_round_trip(config, tmp_path):
+    from dataclasses import replace
+    for path in (r"C:\Users\x\part.step", "/tmp/part.step"):
+        cfg = replace(config, geometry_path=path)
+        wbjn, _ = JournalGenerator.write(cfg, str(tmp_path))
+        text = Path(wbjn).read_text()
+        compile(text, "simulation_setup.wbjn", "exec")
+        call = _setfile_call(text)
+        filepath_kw = next(kw for kw in call.keywords if kw.arg == "FilePath")
+        assert filepath_kw.value.value == path
+
+
 def test_summary_omits_agent_sections_when_empty(config, tmp_path):
     html = Path(SummaryGenerator.write(config, str(tmp_path))).read_text()
     assert "Load Cases" not in html and "Assumptions" not in html and "Open Questions" not in html

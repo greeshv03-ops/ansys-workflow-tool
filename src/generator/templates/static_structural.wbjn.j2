@@ -7,7 +7,7 @@ SetScriptVersion(Version="22.2 Release")
 template1 = GetTemplate(TemplateName="Static Structural")
 system1 = template1.CreateSystem()
 geometry1 = system1.GetContainer(ComponentName="Geometry")
-geometry1.SetFile(FilePath=r"{{ config.geometry_path }}")
+geometry1.SetFile(FilePath={{ config.geometry_path|pyquote }})
 {{ mat.engineering_data("system1", materials) }}
 {% if load_cases %}
 system1.DisplayText = {{ load_cases[0].name|pyquote }}
