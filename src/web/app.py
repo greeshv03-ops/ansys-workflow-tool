@@ -165,7 +165,10 @@ def _run(sess: Session, brief: str, instruction: Optional[str]) -> dict:
 @app.post("/session/{sid}/propose")
 def propose_endpoint(sid: str, body: BriefIn):
     sess = _get(sid)
-    sess.proposal = None
+    # Don't clear sess.proposal/valid here: if _run fails (cap hit, model error)
+    # the session must keep whatever valid proposal it already had. A fresh
+    # propose still ignores any prior proposal because _run only threads
+    # `prior` through when an instruction is given (see _run below).
     return _run(sess, body.brief, None)
 
 

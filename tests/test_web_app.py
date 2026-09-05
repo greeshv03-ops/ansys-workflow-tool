@@ -133,6 +133,21 @@ def test_calls_per_session_cap(client, step_bytes, monkeypatch):
     assert r.status_code == 429 and "2" in r.json()["detail"]
 
 
+def test_repropose_failure_keeps_prior_valid_proposal(client, step_bytes, monkeypatch):
+    sid = upload(client, step_bytes).json()["session_id"]
+    r = client.post(f"/session/{sid}/propose", json={"brief": "A steel bracket."})
+    assert r.status_code == 200 and r.json()["valid"] is True
+
+    monkeypatch.setattr(webapp, "CALLS_PER_SESSION", 1)
+    r2 = client.post(f"/session/{sid}/propose", json={"brief": "Another steel bracket."})
+    assert r2.status_code == 429
+
+    sess = webapp.SESSIONS[sid]
+    assert sess.proposal is not None and sess.valid is True
+    d = client.get(f"/session/{sid}/download")
+    assert d.status_code == 200
+
+
 def test_sessions_per_hour_cap(client, step_bytes, monkeypatch):
     monkeypatch.setattr(webapp, "SESSION_CAP_PER_HOUR", 1)
     assert upload(client, step_bytes).status_code == 200
