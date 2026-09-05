@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FEA Setup Agent</title>
+<style>
+  body{margin:0;font:15px/1.45 system-ui,Segoe UI,Arial,sans-serif;color:#1c2430;background:#edeff1}
+  header{padding:14px 24px;background:#1c2430;color:#fff;font-weight:600;letter-spacing:.02em}
+  main{display:grid;grid-template-columns:380px 1fr;gap:20px;padding:20px;max-width:1400px;margin:0 auto}
+  section{background:#fff;border:1px solid #c9cfd6;padding:14px}
+  h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#6c7683;margin:0 0 8px}
+  textarea{width:100%;box-sizing:border-box;min-height:110px;font:inherit;padding:8px;border:1px solid #c9cfd6}
+  button{font:inherit;padding:8px 14px;border:0;background:#3f6f9e;color:#fff;cursor:pointer;margin-top:8px}
+  button:disabled{background:#9aa5b2;cursor:default}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin-bottom:14px}
+  th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#6c7683;border-bottom:1px solid #1c2430;padding:4px 8px 6px 0}
+  td{padding:6px 8px 6px 0;border-top:1px solid #e3e6ea;vertical-align:top}
+  td.r{color:#6c7683}
+  #render{width:100%;border:1px solid #c9cfd6;background:#fff}
+  .msg{padding:8px 10px;margin:6px 0;border-left:3px solid #c9cfd6;background:#f6f7f8;font-size:14px}
+  .msg.user{border-color:#3f6f9e}
+  .msg.bad{border-color:#d98a2b}
+  .err{color:#a33;margin-top:8px}
+  .legend span{display:inline-block;width:12px;height:12px;margin:0 4px 0 12px;vertical-align:middle}
+  ul{margin:4px 0 12px 18px}
+  #status{font-size:13px;color:#6c7683;margin-top:6px}
+</style>
+</head>
+<body>
+<header>FEA Setup Agent — Static Structural</header>
+<main>
+  <div>
+    <section>
+      <h2>1 · Part</h2>
+      <input type="file" id="file" accept=".step,.stp">
+      <div id="status"></div>
+    </section>
+    <section style="margin-top:20px">
+      <h2>2 · Brief</h2>
+      <textarea id="brief" placeholder="What does this part do? Material if known, how it is mounted, what loads it sees. Example: Mild steel bracket bolted to a trailer frame through the four holes, carrying a 12 kg battery box on its top face. Road use."></textarea>
+      <button id="go" disabled>Propose setup</button>
+      <div class="err" id="err"></div>
+    </section>
+    <section style="margin-top:20px">
+      <h2>3 · Revise</h2>
+      <div id="chat"></div>
+      <textarea id="instruction" placeholder="Change something: use aluminum, add a 3 g lateral case, move the load to the front face…" style="min-height:70px"></textarea>
+      <button id="revise" disabled>Revise</button>
+    </section>
+  </div>
+  <div>
+    <section>
+      <h2>Render <span class="legend"><span style="background:#3f6f9e"></span>support <span style="background:#d98a2b"></span>load</span></h2>
+      <img id="render" alt="part render">
+    </section>
+    <section style="margin-top:20px" id="proposal" hidden>
+      <h2>Proposal</h2>
+      <div id="messages"></div>
+      <table id="t-materials"></table>
+      <table id="t-supports"></table>
+      <table id="t-loads"></table>
+      <table id="t-cases"></table>
+      <table id="t-mesh"></table>
+      <h2>Assumptions</h2><ul id="assumptions"></ul>
+      <h2>Questions for the engineer</h2><ul id="questions"></ul>
+      <button id="download" disabled>Download journal + report</button>
+    </section>
+  </div>
+</main>
+<script>
+let sid = null, summary = null;
+const $ = id => document.getElementById(id);
+const face = t => { const f = (summary.faces || []).find(x => x.id === t); if (f) return f.label; const g = (summary.hole_groups || []).find(x => x.id === t); return g ? `${g.count} holes Ø${(2*g.radius_mm).toFixed(1)} (${g.pattern})` : t; };
+const vec = v => `(${v.x}, ${v.y}, ${v.z})`;
+function table(id, head, rows) { $(id).innerHTML = `<tr>${head.map(h => `<th>${h}</th>`).join('')}</tr>` + rows.map(r => `<tr>${r.map((c, i) => `<td class="${i === r.length - 1 ? 'r' : ''}">${c}</td>`).join('')}</tr>`).join(''); }
+function show(body) {
+  $('render').src = 'data:image/png;base64,' + body.render_png_base64;
+  $('proposal').hidden = false;
+  const p = body.proposal;
+  $('messages').innerHTML = body.valid ? '' : body.messages.map(m => `<div class="msg bad">${m}</div>`).join('');
+  table('t-materials', ['Body', 'Material id', 'Rationale'], p.materials.map(m => [m.body_id, m.material_id, m.rationale]));
+  table('t-supports', ['Support', 'Target', 'Type', 'Rationale'], p.supports.map(s => [s.id, face(s.target), s.type, s.rationale]));
+  table('t-loads', ['Load', 'Target', 'Type', 'Magnitude', 'Direction', 'Rationale'], p.loads.map(l => [l.id, face(l.target), l.type, l.magnitude, vec(l.direction), l.rationale]));
+  table('t-cases', ['Case', 'Accel (g)', 'Loads', 'Supports', 'Rationale'], p.load_cases.map(c => [c.name, vec(c.acceleration_g), c.load_ids.join(', '), c.support_ids.join(', '), c.rationale]));
+  table('t-mesh', ['Mesh', 'Value', 'Reason'], [['Global size', p.mesh.global_size_mm + ' mm', ''], ['Elements', p.mesh.element_type, '']].concat(p.mesh.refinement.map(r => ['Refine ' + face(r.target), r.size_mm + ' mm', r.reason])));
+  $('assumptions').innerHTML = p.assumptions.map(a => `<li>${a}</li>`).join('') || '<li>none</li>';
+  $('questions').innerHTML = p.questions.map(q => `<li>${q}</li>`).join('') || '<li>none</li>';
+  $('download').disabled = !body.valid;
+  $('revise').disabled = false;
+}
+function chat(text, cls) { const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; $('chat').appendChild(d); }
+async function call(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json().catch(() => ({ detail: r.statusText }));
+  if (!r.ok) throw new Error(body.detail || 'request failed');
+  return body;
+}
+$('file').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('status').textContent = 'Reading part…'; $('err').textContent = '';
+  const fd = new FormData(); fd.append('file', f);
+  try {
+    const body = await call('/session', { method: 'POST', body: fd });
+    sid = body.session_id; summary = body.summary;
+    $('render').src = 'data:image/png;base64,' + body.render_png_base64;
+    $('status').textContent = `${summary.bodies.length} body, ${summary.faces.length} faces, ${summary.hole_groups.length} hole groups. Bbox ${summary.bbox_mm.x} × ${summary.bbox_mm.y} × ${summary.bbox_mm.z} mm.`;
+    $('go').disabled = false; $('proposal').hidden = true; $('chat').innerHTML = ''; $('revise').disabled = true;
+  } catch (err) { $('status').textContent = ''; $('err').textContent = err.message; }
+};
+async function submit(path, payload, label) {
+  $('err').textContent = ''; $('go').disabled = true; $('revise').disabled = true;
+  chat(label, 'user');
+  try {
+    const body = await call(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    chat(body.valid ? `Proposal ready (${body.attempts} attempt${body.attempts > 1 ? 's' : ''}).` : `Proposal has ${body.messages.length} validator issue(s). Revise or resubmit.`, body.valid ? '' : 'bad');
+    show(body);
+  } catch (err) {
+    $('err').innerHTML = err.message + ' <button id="retry">Retry</button>';
+    $('retry').onclick = () => submit(path, payload, label);
+  }
+  $('go').disabled = false;
+}
+$('go').onclick = () => submit(`/session/${sid}/propose`, { brief: $('brief').value }, $('brief').value);
+$('revise').onclick = () => { const t = $('instruction').value; $('instruction').value = ''; submit(`/session/${sid}/revise`, { instruction: t }, t); };
+$('download').onclick = () => { window.location = `/session/${sid}/download`; };
+</script>
+</body>
+</html>
