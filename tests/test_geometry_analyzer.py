@@ -105,3 +105,10 @@ def test_iges_error_is_value_error_not_import_error(tmp_path):
         pass  # expected — either "Unsupported" or "IGES support unavailable"
     except Exception as e:
         pytest.fail(f"Expected ValueError, got {type(e).__name__}: {e}")
+
+
+def test_placeholder_step_body_name_falls_back_to_body_n(simple_box_step):
+    # cadquery/OCC exports name each solid "Open CASCADE STEP translator <ver> <n>";
+    # that is a translator artifact, not a part name, and must not reach the report.
+    _, solids = GeometryAnalyzer.analyze_with_solids(simple_box_step)
+    assert [ns.body.name for ns in solids] == ["Body 1"]

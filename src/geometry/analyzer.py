@@ -381,10 +381,19 @@ def _make_named_solid(body_id: int, name: str, solid, with_volume: bool = True) 
     )
 
 
+_PLACEHOLDER_NAME_PREFIXES = ("open cascade step translator",)
+
+
+def _is_placeholder_name(name: str) -> bool:
+    """True for names the STEP writer invented (e.g. "Open CASCADE STEP translator 7.8 1")."""
+    return name.strip().lower().startswith(_PLACEHOLDER_NAME_PREFIXES)
+
+
 def _label_name(label) -> str:
     name_attr = TDataStd_Name()
     if label.FindAttribute(TDataStd_Name.GetID_s(), name_attr):
-        return str(name_attr.Get().ToExtString())
+        name = str(name_attr.Get().ToExtString())
+        return "" if _is_placeholder_name(name) else name
     return ""
 
 

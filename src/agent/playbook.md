@@ -28,7 +28,7 @@ If the brief gives a mass, convert to force with 9.81 m/s² and state it. If the
 
 ## Mesh sizing
 
-Global element size: about 1/20 of the smallest bounding-box dimension, clamped to 1 to 10 percent of the largest dimension. Refine hole groups to hole radius divided by 4, fillets and sharp corners to global divided by 4. Shell elements only when thin_walls is true.
+Global element size: about 1/20 of the smallest bounding-box dimension, clamped to 1 to 10 percent of the largest dimension. Refine hole groups to hole radius divided by 4, fillets and sharp corners to global divided by 4. Every refinement size must be strictly smaller than the global size; if a refinement would come out equal to or larger than the global size (a large hole on a small part, or a global size already at the lower clamp), shrink it to half the global size or leave that refinement out. Shell elements only when thin_walls is true.
 
 ## Material selection
 
