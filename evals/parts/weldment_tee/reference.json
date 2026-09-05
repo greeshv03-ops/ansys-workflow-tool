@@ -1,0 +1,8 @@
+{
+  "material_family": "Steel",
+  "supports": [{"type": "fixed", "targets": ["hole_group:4"], "alternatives": ["label:-X face"]}],
+  "loads": [{"type": "force", "targets": ["label:-Y face"], "alternatives": ["label:+Y face"]}],
+  "load_cases": [
+    {"name": "static", "acceleration_g": [0, 0, -1]}
+  ]
+}

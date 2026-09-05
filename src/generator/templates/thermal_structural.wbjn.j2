@@ -10,5 +10,5 @@ systemSS = templateSS.CreateSystem(Position="Right", RelativeTo=systemTH)
 systemTH.GetContainer(ComponentName="Solution").ConnectSystemsTo(
     systemSS.GetContainer(ComponentName="Setup"))
 geometry1 = systemTH.GetContainer(ComponentName="Geometry")
-geometry1.SetFile(FilePath=r"{{ config.geometry_path }}")
+geometry1.SetFile(FilePath={{ config.geometry_path|pyquote }})
 {{ mat.engineering_data("systemTH", materials, thermal=True) }}

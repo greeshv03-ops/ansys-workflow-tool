@@ -7,7 +7,27 @@ SetScriptVersion(Version="22.2 Release")
 template1 = GetTemplate(TemplateName="Static Structural")
 system1 = template1.CreateSystem()
 geometry1 = system1.GetContainer(ComponentName="Geometry")
-geometry1.SetFile(FilePath=r"{{ config.geometry_path }}")
+geometry1.SetFile(FilePath={{ config.geometry_path|pyquote }})
 {{ mat.engineering_data("system1", materials) }}
+{% if load_cases %}
+system1.DisplayText = {{ load_cases[0].name|pyquote }}
+{% for lc in load_cases[1:] %}
+system{{ loop.index + 1 }} = template1.CreateSystem(
+    ComponentsToShare=[system1.GetComponent(Name="Engineering Data"),
+                       system1.GetComponent(Name="Geometry"),
+                       system1.GetComponent(Name="Model")],
+    Position="Right",
+    RelativeTo=system{{ loop.index }})
+system{{ loop.index + 1 }}.DisplayText = {{ lc.name|pyquote }}
+{% endfor %}
+
+# --- Load cases: apply these in Mechanical for each system ---
+{% for lc in load_cases %}
+# system{{ loop.index }} "{{ lc.name|pycomment }}"{% if lc.rationale %} — {{ lc.rationale|pycomment }}{% endif %}{{ "\n" -}}
+{% for bc in lc.boundary_conditions %}
+#   {{ bc.bc_type|pycomment }} on {{ bc.target|pycomment }}{% if bc.magnitude is not none %}: {{ bc.magnitude|num }} {{ bc.unit|pycomment }}{% endif %}{% if bc.direction %} along {{ bc.direction|pycomment }}{% endif %}{{ "\n" -}}
+{% endfor %}
+{% endfor %}
+{% endif %}
 # Open Mechanical and run mechanical_setup.py via File → Scripting → Run Script File
 # to apply mesh, material, solver settings, and output requests.

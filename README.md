@@ -1,0 +1,96 @@
+# ANSYS Workflow Tool
+
+Two ways to go from a CAD file to a ready-to-run ANSYS Workbench setup:
+
+1. **FEA Setup Agent** (web): describe the part's job in a sentence and let a model propose the full setup, checked by a deterministic validator. Below.
+2. **Desktop wizard** (PyQt6): step through six guided screens with smart defaults computed from the geometry. See [The original desktop wizard](#the-original-desktop-wizard).
+
+Both produce the same outputs: a Workbench journal (`.wbjn`) that applies every setting, and an HTML settings summary.
+
+## FEA Setup Agent
+
+Upload a STEP file, describe the part's job in a sentence or two, and get a complete ANSYS Static Structural setup: materials, supports, loads, load cases, and mesh, each with a rationale. A deterministic validator checks the proposal, a render shows which faces carry supports and loads, and the download is a Workbench journal plus an HTML report. An eval harness scores the agent against ten reference parts.
+
+Live demo: not yet deployed
+
+### Architecture
+
+STEP → GeometryAnalyzer → Summary Builder (compact JSON) → Proposal Agent (Claude, structured output) → Validator (8 rules, one retry) → Adapter → Journal + Report. Renderer colors the chosen faces. FastAPI serves one page. See `docs/superpowers/specs/2026-09-03-fea-setup-agent-design.md`.
+
+### Eval results
+
+Latest run: 2026-09-05, playbook `6967032e978c`, 3 runs per part, claude-opus-5 (32 calls, 1 validator retry).
+
+| part | load_cases | supports | loads | material | first_pass_valid | overall |
+|---|---|---|---|---|---|---|
+| bracket_flat_2hole | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
+| bracket_l_4hole | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
+| enclosure_lidless | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
+| frame_tube | 0.50 ±0.00 | 1.00 ±0.00 | 0.67 ±0.50 | 1.00 ±0.00 | 1.00 ±0.00 | 0.83 ±0.10 |
+| lid_flat | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
+| mount_pedestal | 0.56 ±0.17 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 0.67 ±0.50 | 0.84 ±0.10 |
+| pin_clevis | 0.33 ±0.50 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 0.87 ±0.10 |
+| shaft_stepped | 0.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 0.80 ±0.00 |
+| tray_open | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
+| weldment_tee | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 | 1.00 ±0.00 |
+| **all** | **0.74** | **1.00** | **0.97** | **1.00** | **0.97** | **0.93** |
+
+
+Scores are 0 to 1. `load_cases`, `supports`, `loads` are the fraction of reference items matched (by id or an accepted alternative). `material` is family match. `first_pass_valid` is whether the validator passed without a retry. Three runs per part; ± is half the spread.
+
+### Screenshots
+
+Screenshots (render with colored faces, proposal tables, report HTML) will be added after the first live run.
+
+## Run the agent locally
+
+    conda env create -f environment.yml && conda activate fea-agent
+    export ANTHROPIC_API_KEY=...
+    uvicorn src.web.app:app --reload
+
+On Linux without a display, start Xvfb first and export DISPLAY, or just use the Docker image: `Xvfb :99 -screen 0 1280x1024x24 &  export DISPLAY=:99`
+
+## Run the agent with Docker
+
+    docker build -t fea-agent .
+    docker run -p 8000:8000 -e ANTHROPIC_API_KEY=... fea-agent
+
+## Deploy
+
+Pick Fly.io or Render. For Fly:
+
+    fly launch --no-deploy
+    fly secrets set ANTHROPIC_API_KEY=...
+    fly deploy
+
+Accept the generated `fly.toml` with internal port 8000. Record the public URL in this README. Memory: request at least 2 GB; cadquery plus vtk needs it.
+
+## Tests and evals
+
+    python -m pytest -q
+    python -m evals.run_evals --repeats 3
+
+## The original desktop wizard
+
+The agent grew out of a Windows desktop app that simplifies ANSYS Workbench/Mechanical setup for engineers who would rather confirm good defaults than fill in every field. It still lives in `src/wizard` and shares the analyzer, material database, and journal generator with the agent.
+
+**What it does**
+
+- Loads STEP, IGES, or Parasolid (`.x_t`) geometry and analyzes it with cadquery: bounding box, volume, body count, thin walls, holes, symmetry planes, and sharp edges that concentrate stress.
+- Supports Static Structural, Transient Structural, and Thermal-Structural simulations.
+- Pre-fills every screen from a smart-defaults engine that maps the geometry features and simulation type to recommended materials, mesh sizing, and solver settings.
+- Six wizard pages: Upload, Simulation type, Material, Boundary conditions, Mesh, Solver and output.
+- The boundary-conditions page embeds a 3D viewer (pyvista in Qt); click a face in the model to set it as the target of a support or load, or pick from the auto-detected face labels.
+- Materials come from a bundled SQLite library with modulus, Poisson's ratio, density, thermal properties, and strength values, searchable from the wizard.
+- Output is a Workbench journal that applies every confirmed setting when run from Workbench, plus an HTML settings summary you can print to PDF.
+
+**Run it**
+
+    pip install -r requirements.txt
+    python -m src.main
+
+**Package it** as a single executable with PyInstaller (the spec file is generated on first build):
+
+    pyinstaller --onefile --windowed -n ansys-setup-wizard src/main.py
+
+Design notes: `docs/superpowers/specs/2026-05-09-ansys-workflow-tool-design.md` (wizard) and `docs/superpowers/specs/2026-05-30-bc-face-picking-design.md` (face picking).

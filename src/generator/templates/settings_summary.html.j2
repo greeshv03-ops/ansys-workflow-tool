@@ -35,25 +35,37 @@
 
 <h2>Materials</h2>
 <table>
-<tr><th>Body</th><th>Instances</th><th>Material</th></tr>
+<tr><th>Body</th><th>Instances</th><th>Material</th><th>Rationale</th></tr>
 {% for bm in config.body_materials %}
-<tr><td>{{ bm.body_name }}</td><td>{{ bm.body_ids|length }}</td><td>{{ bm.material_name }}</td></tr>
+<tr><td>{{ bm.body_name }}</td><td>{{ bm.body_ids|length }}</td><td>{{ bm.material_name }}</td><td class="note">{{ bm.rationale or "—" }}</td></tr>
 {% else %}
-<tr><td colspan="3"><em>No materials assigned</em></td></tr>
+<tr><td colspan="4"><em>No materials assigned</em></td></tr>
 {% endfor %}
 </table>
 
 <h2>Boundary Conditions</h2>
 <table>
-<tr><th>Type</th><th>Target</th><th>Magnitude</th><th>Direction</th></tr>
+<tr><th>Type</th><th>Target</th><th>Magnitude</th><th>Direction</th><th>Rationale</th></tr>
 {% for bc in config.boundary_conditions %}
 <tr><td>{{ bc.bc_type }}</td><td>{{ bc.target }}</td>
 <td>{% if bc.magnitude is not none %}{{ bc.magnitude }} {{ bc.unit }}{% else %}—{% endif %}</td>
-<td>{{ bc.direction or "—" }}</td></tr>
+<td>{{ bc.direction or "—" }}</td><td class="note">{{ bc.rationale or "—" }}</td></tr>
 {% else %}
-<tr><td colspan="4"><em>None defined</em></td></tr>
+<tr><td colspan="5"><em>None defined</em></td></tr>
 {% endfor %}
 </table>
+
+{% if config.load_cases %}
+<h2>Load Cases</h2>
+<table>
+<tr><th>Case</th><th>Boundary conditions</th><th>Rationale</th></tr>
+{% for lc in config.load_cases %}
+<tr><td>{{ lc.name }}</td>
+<td>{% for bc in lc.boundary_conditions %}{{ bc.bc_type }} on {{ bc.target }}{% if bc.magnitude is not none %} ({{ bc.magnitude|round(2) }} {{ bc.unit }}{% if bc.direction %} along {{ bc.direction }}{% endif %}){% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+<td class="note">{{ lc.rationale or "—" }}</td></tr>
+{% endfor %}
+</table>
+{% endif %}
 
 <h2>Mesh Settings</h2>
 <table>
@@ -81,6 +93,18 @@
 <tr><td>Outputs</td><td>{{ config.solver.outputs|join(", ")|replace("_"," ")|title }}</td></tr>
 </table>
 
+{% if config.assumptions %}
+<h2>Assumptions</h2>
+<ul>
+{% for a in config.assumptions %}<li>{{ a }}</li>
+{% endfor %}</ul>
+{% endif %}
+{% if config.questions %}
+<h2>Open Questions</h2>
+<ul>
+{% for q in config.questions %}<li>{{ q }}</li>
+{% endfor %}</ul>
+{% endif %}
 <p class="note" style="margin-top:32px">
 Apply boundary conditions manually in ANSYS Mechanical by selecting the faces/edges named above.
 All other settings are pre-configured via the companion journal script.

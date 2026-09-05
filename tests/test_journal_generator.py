@@ -154,3 +154,139 @@ def test_journal_thermal_includes_thermal_properties(thermal_config, tmp_path):
     assert "Coefficient of Thermal Expansion" in text
     assert "Thermal Conductivity" in text
     assert "Specific Heat" in text
+
+
+def test_journal_single_system_when_no_load_cases(config, tmp_path):
+    wbjn, _ = JournalGenerator.write(config, str(tmp_path))
+    text = Path(wbjn).read_text()
+    assert text.count("CreateSystem(") == 1
+    assert "ComponentsToShare" not in text
+
+
+def test_journal_one_system_per_load_case(config, tmp_path):
+    from dataclasses import replace
+    from src.models import LoadCaseBlock
+    cases = [
+        LoadCaseBlock(name="static 1g", boundary_conditions=[
+            BoundaryCondition(bc_type="Fixed Support", target="Cyl hole #1"),
+            BoundaryCondition(bc_type="Acceleration", target="All Bodies", magnitude=9806.65, direction="(0, 0, -1)", unit="mm/s^2")]),
+        LoadCaseBlock(name="shock 5g", boundary_conditions=[
+            BoundaryCondition(bc_type="Fixed Support", target="Cyl hole #1"),
+            BoundaryCondition(bc_type="Force", target="+X face", magnitude=500.0, direction="(0, 0, -1)")]),
+    ]
+    multi = replace(config, load_cases=cases)
+    wbjn, _ = JournalGenerator.write(multi, str(tmp_path))
+    text = Path(wbjn).read_text()
+    assert text.count("CreateSystem(") == 2
+    assert 'system1.DisplayText = "static 1g"' in text
+    assert 'system2.DisplayText = "shock 5g"' in text
+    assert text.count("ComponentsToShare") == 1
+    assert 'GetComponent(Name="Model")' in text
+    assert "Force on +X face: 500 N along (0, 0, -1)" in text
+    assert text.count('CreateMaterial(Name="Structural Steel")') == 1
+    lines = text.splitlines()
+    assert '# system1 "static 1g"' in lines
+    assert '# system2 "shock 5g"' in lines
+    assert "\n# system2" in text
+    assert "#   Fixed Support on Cyl hole #1" in lines
+    assert "#   Force on +X face: 500 N along (0, 0, -1)" in lines
+    open_mechanical_lines = [ln for ln in lines if ln.startswith("# Open Mechanical")]
+    assert len(open_mechanical_lines) == 1
+
+
+def test_journal_escapes_special_characters_in_load_case_name(config, tmp_path):
+    import json
+    from dataclasses import replace
+    from src.models import LoadCaseBlock, BoundaryCondition as BC
+    special_name = 'weird "quote"\nand a backslash \\ end'
+    cases = [LoadCaseBlock(name=special_name, boundary_conditions=[
+        BC(bc_type="Fixed Support", target="Cyl hole #1"),
+    ])]
+    special = replace(config, load_cases=cases)
+    wbjn, _ = JournalGenerator.write(special, str(tmp_path))
+    text = Path(wbjn).read_text()
+    compile(text, "simulation_setup.wbjn", "exec")
+    assert f"system1.DisplayText = {json.dumps(special_name)}" in text
+
+
+def test_journal_multi_load_case_names_with_special_characters_compile(config, tmp_path):
+    from dataclasses import replace
+    from src.models import LoadCaseBlock, BoundaryCondition as BC
+    cases = [
+        LoadCaseBlock(name='first "case"', boundary_conditions=[
+            BC(bc_type="Fixed Support", target="Cyl hole #1"),
+        ]),
+        LoadCaseBlock(name='second\ncase\\with\\backslashes', rationale='line one\nline two', boundary_conditions=[
+            BC(bc_type="Force", target='face\nwith\nnewlines', magnitude=500.0, direction="Y"),
+        ]),
+    ]
+    multi = replace(config, load_cases=cases)
+    wbjn, _ = JournalGenerator.write(multi, str(tmp_path))
+    text = Path(wbjn).read_text()
+    compile(text, "simulation_setup.wbjn", "exec")
+    # The rationale and target contained embedded newlines; pycomment must
+    # collapse them to one line each so no bare continuation line escapes
+    # the leading "#" and breaks the script.
+    assert "line one line two" in text
+    assert "face with newlines" in text
+
+
+def _setfile_call(text: str):
+    import ast
+    setfile_line = next(ln for ln in text.splitlines() if "SetFile(FilePath=" in ln)
+    tree = ast.parse(setfile_line.strip())
+    assert len(tree.body) == 1
+    call = tree.body[0].value
+    assert isinstance(call, ast.Call)
+    return call
+
+
+def test_journal_geometry_path_injection_is_quoted_safely(config, tmp_path):
+    import ast
+    from dataclasses import replace
+    hostile = 'x"); import os; os.system("calc"); (".step'
+    cfg = replace(config, geometry_path=hostile)
+    wbjn, _ = JournalGenerator.write(cfg, str(tmp_path))
+    text = Path(wbjn).read_text()
+    compile(text, "simulation_setup.wbjn", "exec")
+    call = _setfile_call(text)
+    filepath_kw = next(kw for kw in call.keywords if kw.arg == "FilePath")
+    assert isinstance(filepath_kw.value, ast.Constant)
+    assert filepath_kw.value.value == hostile
+
+
+def test_journal_geometry_path_ordinary_paths_round_trip(config, tmp_path):
+    from dataclasses import replace
+    for path in (r"C:\Users\x\part.step", "/tmp/part.step"):
+        cfg = replace(config, geometry_path=path)
+        wbjn, _ = JournalGenerator.write(cfg, str(tmp_path))
+        text = Path(wbjn).read_text()
+        compile(text, "simulation_setup.wbjn", "exec")
+        call = _setfile_call(text)
+        filepath_kw = next(kw for kw in call.keywords if kw.arg == "FilePath")
+        assert filepath_kw.value.value == path
+
+
+def test_summary_omits_agent_sections_when_empty(config, tmp_path):
+    html = Path(SummaryGenerator.write(config, str(tmp_path))).read_text()
+    assert "Load Cases" not in html and "Assumptions" not in html and "Open Questions" not in html
+
+
+def test_summary_renders_load_cases_and_rationale(config, tmp_path):
+    from dataclasses import replace
+    from src.models import LoadCaseBlock, BodyMaterial
+    agent_cfg = replace(
+        config,
+        body_materials=[BodyMaterial(body_name="bracket", body_ids=[0], material_id=1,
+                                     material_name="Structural Steel", rationale="brief says mild steel")],
+        boundary_conditions=[BoundaryCondition(bc_type="Fixed Support", target="Cyl hole #1", rationale="bolted to frame")],
+        load_cases=[LoadCaseBlock(name="shock 5g", rationale="pothole per ISO 16750-3", boundary_conditions=[
+            BoundaryCondition(bc_type="Acceleration", target="All Bodies", magnitude=49033.25, direction="(0, 0, -1)", unit="mm/s^2")])],
+        assumptions=["mass hangs from the free end"],
+        questions=["bolt preload?"],
+    )
+    html = Path(SummaryGenerator.write(agent_cfg, str(tmp_path))).read_text()
+    assert "Load Cases" in html and "shock 5g" in html and "pothole per ISO 16750-3" in html
+    assert "brief says mild steel" in html and "bolted to frame" in html
+    assert "Assumptions" in html and "mass hangs from the free end" in html
+    assert "Open Questions" in html and "bolt preload?" in html

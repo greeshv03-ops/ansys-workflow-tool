@@ -6,5 +6,5 @@ SetScriptVersion(Version="22.2 Release")
 template1 = GetTemplate(TemplateName="Transient Structural")
 system1 = template1.CreateSystem()
 geometry1 = system1.GetContainer(ComponentName="Geometry")
-geometry1.SetFile(FilePath=r"{{ config.geometry_path }}")
+geometry1.SetFile(FilePath={{ config.geometry_path|pyquote }})
 {{ mat.engineering_data("system1", materials) }}

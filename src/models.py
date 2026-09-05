@@ -23,6 +23,9 @@ class FaceLabel:
     centroid: tuple[float, float, float]
     normal: Optional[tuple[float, float, float]] = None
     radius: Optional[float] = None
+    axis: Optional[tuple[float, float, float]] = None        # cylinder axis direction
+    axis_point: Optional[tuple[float, float, float]] = None  # a point on that axis
+    index: int = -1                                          # position in features.faces
 
 
 @dataclass
@@ -55,6 +58,7 @@ class BoundaryCondition:
     magnitude: Optional[float] = None
     direction: Optional[str] = None
     unit: str = "N"
+    rationale: str = ""
 
 
 @dataclass
@@ -90,6 +94,15 @@ class BodyMaterial:
     body_ids: list[int]
     material_id: int
     material_name: str
+    rationale: str = ""
+
+
+@dataclass
+class LoadCaseBlock:
+    """One Static Structural system's worth of boundary conditions, agent path only."""
+    name: str
+    boundary_conditions: list[BoundaryCondition] = field(default_factory=list)
+    rationale: str = ""
 
 
 @dataclass
@@ -101,6 +114,9 @@ class SimulationConfig:
     boundary_conditions: list[BoundaryCondition]
     mesh: MeshSettings
     solver: SolverSettings
+    load_cases: list[LoadCaseBlock] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
+    questions: list[str] = field(default_factory=list)
 
     @property
     def primary_material_name(self) -> str:
