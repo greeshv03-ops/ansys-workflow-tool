@@ -62,12 +62,14 @@ def test_hole_group_rectangular(plate_4holes_step):
     assert s.hole_groups[0].pattern == "rectangular"
 
 
-def _synthetic_features(n_faces: int, tiny: bool = False) -> GeometryFeatures:
+def _synthetic_features(n_faces: int, tiny: bool = False, n_tiny: int = 0) -> GeometryFeatures:
     faces = [FaceLabel(name=f"face {i}", face_type="planar", area=100.0,
                        centroid=(0, 0, 0), normal=(0, 0, 1), index=i) for i in range(n_faces)]
-    if tiny:
-        faces.append(FaceLabel(name="speck", face_type="planar", area=0.01,
-                               centroid=(1, 1, 1), normal=(0, 0, 1), index=n_faces))
+    tiny_count = n_tiny + (1 if tiny else 0)
+    for k in range(tiny_count):
+        name = "speck" if tiny_count == 1 else f"speck{k}"
+        faces.append(FaceLabel(name=name, face_type="planar", area=0.01,
+                               centroid=(1, 1, 1), normal=(0, 0, 1), index=n_faces + k))
     total = sum(f.area for f in faces)
     return GeometryFeatures(bbox=(100, 50, 20), volume=1000.0, surface_area=total, body_count=1,
                             thin_walls=False, holes=[], symmetry_planes=[], sharp_edges=False, faces=faces,
@@ -91,3 +93,14 @@ def test_single_body_faces_get_body_zero():
     f = _synthetic_features(3)
     s = build_summary(f, f.bodies)
     assert {face.body_id for face in s.faces} == {0}
+
+
+def test_face_cap_checked_after_pruning():
+    """Raw face count exceeds FACE_CAP, but enough faces are prunable that the
+    kept (post-prune) count is under the cap, so build_summary must succeed."""
+    n_significant = 50
+    n_tiny = 200
+    f = _synthetic_features(n_significant, n_tiny=n_tiny)
+    assert len(f.faces) == n_significant + n_tiny > FACE_CAP
+    s = build_summary(f, f.bodies)
+    assert len(s.faces) == n_significant

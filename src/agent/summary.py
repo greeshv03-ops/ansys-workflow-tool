@@ -18,8 +18,6 @@ UNITS = {"length": "mm", "force": "N", "mass": "kg"}
 
 def build_summary(features: GeometryFeatures, bodies: list[Body]) -> GeometrySummary:
     labels = list(features.faces)
-    if len(labels) > FACE_CAP:
-        raise ValueError(f"Part has {len(labels)} labeled faces, above the cap of {FACE_CAP}")
 
     groups = _group_holes(labels)
     grouped_ids = {fid for g in groups for fid in g.face_ids}
@@ -31,6 +29,9 @@ def build_summary(features: GeometryFeatures, bodies: list[Body]) -> GeometrySum
         if total_area > 0 and lbl.area < PRUNE_FRACTION * total_area and fid not in grouped_ids:
             continue
         keep.append(lbl)
+
+    if len(keep) > FACE_CAP:
+        raise ValueError(f"Part has {len(keep)} labeled faces, above the cap of {FACE_CAP}")
 
     faces = [SummaryFace(
         id=f"f{lbl.index}",
