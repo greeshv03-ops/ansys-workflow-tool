@@ -1,0 +1,8 @@
+.git
+tests
+docs
+logs
+dist
+build
+*.spec
+__pycache__

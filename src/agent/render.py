@@ -19,7 +19,10 @@ _MATCH_TOL_MM = 0.5
 _AREA_TOL = 0.02
 
 if os.name != "nt" and not os.environ.get("DISPLAY"):
-    pv.start_xvfb()
+    try:
+        pv.start_xvfb()
+    except Exception:
+        pass  # a missing xvfb surfaces later as a render error with a clear message
 
 
 def _hex(rgb) -> str:
