@@ -85,9 +85,12 @@ def score_part(proposal: SetupProposal, reference: dict, db: MaterialDatabase, f
 
     material = 0.0
     if proposal.materials:
-        row = db.get_by_id(proposal.materials[0].material_id)
-        if row and FAMILIES.get(row["category"], row["category"]) == reference.get("material_family"):
-            material = 1.0
+        matches = 0
+        for mat in proposal.materials:
+            row = db.get_by_id(mat.material_id)
+            if row and FAMILIES.get(row["category"], row["category"]) == reference.get("material_family"):
+                matches += 1
+        material = matches / len(proposal.materials)
 
     fpv = 1.0 if first_pass_valid else 0.0
     overall = (load_cases + supports + loads + material + fpv) / 5

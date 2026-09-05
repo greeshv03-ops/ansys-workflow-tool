@@ -70,3 +70,18 @@ def test_accel_match_rules():
     assert not _accel_match((0, 0, -1), (0, 0, -1.3))
     assert not _accel_match((0, 0, -1), (0, 0.5, -0.866))  # 30 degrees off
     assert _accel_match((0, 0, 0), (0, 0, 0))              # both zero counts as a match
+
+
+def test_two_materials_one_matches(summary, reference):
+    prop = SetupProposal.model_validate({
+        "materials": [
+            {"body_id": 0, "material_id": 1, "rationale": "x"},
+            {"body_id": 1, "material_id": 5, "rationale": "x"}
+        ],
+        "supports": [{"id": "s1", "target": "hg1", "type": "fixed", "rationale": "x"}],
+        "loads": [{"id": "l1", "target": "f0", "type": "force", "magnitude": 100.0, "direction": vec(0, 0, -1), "rationale": "x"}],
+        "load_cases": [{"name": "c0", "acceleration_g": vec(0, 0, -1), "load_ids": ["l1"], "support_ids": ["s1"], "rationale": "x"}, {"name": "c1", "acceleration_g": vec(0, 0, -20), "load_ids": ["l1"], "support_ids": ["s1"], "rationale": "x"}],
+        "mesh": {"global_size_mm": 4.0, "element_type": "Solid", "refinement": []},
+        "assumptions": [], "questions": []})
+    s = score_part(prop, resolve_reference_targets(reference, summary), MaterialDatabase(), first_pass_valid=True)
+    assert s["material"] == 0.5
