@@ -24,6 +24,8 @@ Screenshots (render with colored faces, proposal tables, report HTML) will be ad
     export ANTHROPIC_API_KEY=...
     uvicorn src.web.app:app --reload
 
+On Linux without a display, start Xvfb first and export DISPLAY, or just use the Docker image: `Xvfb :99 -screen 0 1280x1024x24 &  export DISPLAY=:99`
+
 ## Run with Docker
 
     docker build -t fea-agent .

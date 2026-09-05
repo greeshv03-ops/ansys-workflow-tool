@@ -22,7 +22,8 @@ if os.name != "nt" and not os.environ.get("DISPLAY"):
     try:
         pv.start_xvfb()
     except Exception:
-        pass  # a missing xvfb surfaces later as a render error with a clear message
+        pass  # pyvista >= 0.45 has no start_xvfb(); on Linux without DISPLAY the first
+        # render will abort the process, so set DISPLAY (Xvfb) or use the Docker image
 
 
 def _hex(rgb) -> str:
