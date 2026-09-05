@@ -184,3 +184,28 @@ def test_journal_one_system_per_load_case(config, tmp_path):
     assert 'GetComponent(Name="Model")' in text
     assert "Force on +X face: 500 N along (0, 0, -1)" in text
     assert text.count('CreateMaterial(Name="Structural Steel")') == 1
+
+
+def test_summary_omits_agent_sections_when_empty(config, tmp_path):
+    html = Path(SummaryGenerator.write(config, str(tmp_path))).read_text()
+    assert "Load Cases" not in html and "Assumptions" not in html and "Open Questions" not in html
+
+
+def test_summary_renders_load_cases_and_rationale(config, tmp_path):
+    from dataclasses import replace
+    from src.models import LoadCaseBlock, BodyMaterial
+    agent_cfg = replace(
+        config,
+        body_materials=[BodyMaterial(body_name="bracket", body_ids=[0], material_id=1,
+                                     material_name="Structural Steel", rationale="brief says mild steel")],
+        boundary_conditions=[BoundaryCondition(bc_type="Fixed Support", target="Cyl hole #1", rationale="bolted to frame")],
+        load_cases=[LoadCaseBlock(name="shock 5g", rationale="pothole per ISO 16750-3", boundary_conditions=[
+            BoundaryCondition(bc_type="Acceleration", target="All Bodies", magnitude=49033.25, direction="(0, 0, -1)", unit="mm/s^2")])],
+        assumptions=["mass hangs from the free end"],
+        questions=["bolt preload?"],
+    )
+    html = Path(SummaryGenerator.write(agent_cfg, str(tmp_path))).read_text()
+    assert "Load Cases" in html and "shock 5g" in html and "pothole per ISO 16750-3" in html
+    assert "brief says mild steel" in html and "bolted to frame" in html
+    assert "Assumptions" in html and "mass hangs from the free end" in html
+    assert "Open Questions" in html and "bolt preload?" in html
