@@ -59,8 +59,9 @@ def _expand(summary: GeometrySummary, targets: list[str]) -> set[str]:
     return out
 
 
-def render_image(named_solids, summary: GeometrySummary, support_targets: list[str],
-                 load_targets: list[str]) -> np.ndarray:
+def _build_plotter(named_solids, summary: GeometrySummary, support_targets: list[str],
+                   load_targets: list[str]) -> pv.Plotter:
+    """Build and configure a plotter with all meshes, colors, and camera setup."""
     support_faces = _expand(summary, support_targets)
     load_faces = _expand(summary, load_targets)
     plotter = pv.Plotter(off_screen=True, window_size=list(WINDOW))
@@ -76,36 +77,30 @@ def render_image(named_solids, summary: GeometrySummary, support_targets: list[s
             plotter.add_mesh(mesh, color=_hex(color), smooth_shading=False, show_edges=False)
     plotter.view_isometric()
     plotter.camera.zoom(1.2)
-    img = plotter.screenshot(return_img=True)
-    plotter.close()
-    return np.asarray(img)[:, :, :3].astype(np.uint8)
+    return plotter
+
+
+def render_image(named_solids, summary: GeometrySummary, support_targets: list[str],
+                 load_targets: list[str]) -> np.ndarray:
+    plotter = _build_plotter(named_solids, summary, support_targets, load_targets)
+    try:
+        img = plotter.screenshot(return_img=True)
+        return np.asarray(img)[:, :, :3].astype(np.uint8)
+    finally:
+        plotter.close()
 
 
 def render_png(named_solids, summary: GeometrySummary, support_targets: list[str],
                load_targets: list[str]) -> bytes:
-    support_faces = _expand(summary, support_targets)
-    load_faces = _expand(summary, load_targets)
-    plotter = pv.Plotter(off_screen=True, window_size=list(WINDOW))
-    plotter.set_background("white")
-    for ns in named_solids:
-        for centroid, area, mesh in _face_meshes(ns):
-            fid = _match(summary, centroid, area)
-            color = BASE_RGB
-            if fid in support_faces:
-                color = SUPPORT_RGB
-            elif fid in load_faces:
-                color = LOAD_RGB
-            plotter.add_mesh(mesh, color=_hex(color), smooth_shading=False, show_edges=False)
-    plotter.view_isometric()
-    plotter.camera.zoom(1.2)
+    plotter = _build_plotter(named_solids, summary, support_targets, load_targets)
     fd, path = tempfile.mkstemp(suffix=".png")
     os.close(fd)
     try:
         plotter.screenshot(path)
-        plotter.close()
         with open(path, "rb") as fh:
             return fh.read()
     finally:
+        plotter.close()
         try:
             os.remove(path)
         except OSError:
